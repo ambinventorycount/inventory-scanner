@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barcode Scanner</title>
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <title>Mobile Barcode Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-javascript-barcode@9.6.2/dist/dbr.js"></script>
     <style>
         body {
             margin: 0;
@@ -12,118 +12,116 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            background-color: #f0f0f0;
             font-family: Arial, sans-serif;
         }
-        
-        #scanner-container {
+
+        #cameraView {
             width: 100%;
-            max-width: 640px;
+            height: 60vh;
+            background-color: black;
             position: relative;
-            margin: 20px 0;
         }
 
-        #video {
-            width: 100%;
-            height: auto;
-            border: 2px solid #333;
-            border-radius: 8px;
+        #result {
+            padding: 20px;
+            font-size: 1.2em;
+            text-align: center;
+            color: #333;
         }
 
-        #scan-button {
-            padding: 15px 30px;
-            font-size: 18px;
-            background-color: #4CAF50;
+        .controls {
+            margin: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1em;
+            background-color: #007bff;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            margin: 10px;
+            transition: background-color 0.3s;
         }
 
-        #scan-button:hover {
-            background-color: #45a049;
+        button:hover {
+            background-color: #0056b3;
         }
 
-        #result {
-            margin: 20px;
-            padding: 15px;
-            border: 1px solid #ddd;
+        select {
+            padding: 12px;
+            font-size: 1em;
             border-radius: 5px;
-            width: 80%;
-            max-width: 600px;
-            word-break: break-all;
         }
     </style>
 </head>
 <body>
-    <h1>Barcode Scanner</h1>
-    <div id="scanner-container">
-        <video id="video"></video>
+    <div id="cameraView"></div>
+    <div id="result">Scanning...</div>
+    <div class="controls">
+        <select id="formatSelect">
+            <option value="all">All Barcode Formats</option>
+            <option value="qr">QR Code</option>
+            <option value="code128">Code 128</option>
+            <option value="ean13">EAN-13</option>
+        </select>
+        <button id="toggleCamera">Start Scan</button>
     </div>
-    <button id="scan-button">Start Scanning</button>
-    <div id="result">Scan result will appear here</div>
 
     <script>
-        const codeReader = new ZXing.BrowserMultiFormatReader();
-        let scanning = false;
-        const scanButton = document.getElementById('scan-button');
-        const resultElement = document.getElementById('result');
-        
-        // Get list of available video devices
-        codeReader.listVideoInputDevices()
-            .then(videoInputDevices => {
-                if (videoInputDevices.length === 0) {
-                    resultElement.textContent = 'No video devices found';
-                    return;
-                }
-                
-                // Try to use back camera first if available
-                const backCamera = videoInputDevices.find(device => 
-                    device.label.toLowerCase().includes('back'));
-                const deviceId = backCamera?.deviceId || videoInputDevices[0].deviceId;
+        let scanner = null;
+        let isScanning = false;
 
-                scanButton.addEventListener('click', () => {
-                    if (!scanning) {
-                        startScanning(deviceId);
+        // Initialize barcode scanner
+        Dynamsoft.DBR.BarcodeScanner.license = "DLS2eyJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSJ9";
+        Dynamsoft.DBR.BarcodeScanner.loadWasm();
+
+        async function initScanner() {
+            try {
+                scanner = await Dynamsoft.DBR.BarcodeScanner.createInstance();
+                scanner.onFrameRead = results => {
+                    if(results.length > 0) {
+                        document.getElementById('result').textContent = results[0].barcodeText;
+                        scanner.pause();
+                        isScanning = false;
+                        document.getElementById('toggleCamera').textContent = 'Start Scan';
+                    }
+                };
+                
+                document.getElementById('toggleCamera').addEventListener('click', async () => {
+                    if(!isScanning) {
+                        await scanner.show();
+                        isScanning = true;
+                        document.getElementById('toggleCamera').textContent = 'Stop Scan';
                     } else {
-                        stopScanning();
+                        scanner.pause();
+                        isScanning = false;
+                        document.getElementById('toggleCamera').textContent = 'Start Scan';
                     }
                 });
-            })
-            .catch(err => {
-                console.error(err);
-                resultElement.textContent = 'Error accessing camera: ' + err.message;
-            });
 
-        function startScanning(deviceId) {
-            codeReader.decodeFromVideoDevice(deviceId, 'video', (result, err) => {
-                if (result) {
-                    resultElement.textContent = result.text;
-                    stopScanning();
-                }
-                if (err && !(err instanceof ZXing.NotFoundException)) {
-                    console.error(err);
-                    resultElement.textContent = 'Error: ' + err.message;
-                    stopScanning();
-                }
-            }).then(() => {
-                scanning = true;
-                scanButton.textContent = 'Stop Scanning';
-            });
-        }
+                document.getElementById('formatSelect').addEventListener('change', (e) => {
+                    const format = e.target.value;
+                    scanner.updateRuntimeSettings(format === 'all' ? 'speed' : format);
+                });
 
-        function stopScanning() {
-            codeReader.reset();
-            scanning = false;
-            scanButton.textContent = 'Start Scanning';
-        }
-
-        // Clean up when page is closed
-        window.addEventListener('beforeunload', () => {
-            if (scanning) {
-                codeReader.reset();
+            } catch(ex) {
+                document.getElementById('result').textContent = 'Error: ' + ex.message;
             }
-        });
+        }
+
+        // Start scanner when page loads
+        window.onload = initScanner;
+
+        // Cleanup when page unloads
+        window.onbeforeunload = () => {
+            if(scanner) {
+                scanner.destroy();
+            }
+        };
     </script>
 </body>
 </html>
