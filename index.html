@@ -4,206 +4,124 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barcode Scanner</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.css">
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
-        .container { padding: 20px; max-width: 600px; margin: 0 auto; }
-        #scanner-container { position: relative; margin: 20px 0; }
-        #scanner-view { width: 100%; height: 300px; border: 2px solid #9b4dca; }
-        .item-list { margin: 20px 0; border-top: 1px solid #eee; }
-        .item { padding: 10px; border-bottom: 1px solid #eee; }
-        .select-container { margin-bottom: 2rem; }
-        #userSelect.invalid { border-color: #ff0000; }
-        .error-message { color: #ff0000; display: none; }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+        }
+        
+        #scanner-container {
+            width: 100%;
+            max-width: 640px;
+            position: relative;
+            margin: 20px 0;
+        }
+
+        #video {
+            width: 100%;
+            height: auto;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+
+        #scan-button {
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        #scan-button:hover {
+            background-color: #45a049;
+        }
+
+        #result {
+            margin: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 80%;
+            max-width: 600px;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h3>Barcode Scanner</h3>
-        
-        <div class="select-container">
-            <label for="userSelect">Select User:</label>
-            <select id="userSelect" required class="invalid">
-                <option value="" disabled selected>Choose user...</option>
-                <option value="User1">User 1</option>
-                <option value="User2">User 2</option>
-                <option value="User3">User 3</option>
-            </select>
-            <div id="userError" class="error-message">Please select a user</div>
-        </div>
-
-        <div id="scanner-container">
-            <video id="scanner-view"></video>
-            <button id="toggle-scanner" class="button">Start Scanner</button>
-        </div>
-
-        <div class="row">
-            <div class="column">
-                <input type="text" id="manualBarcode" placeholder="Enter barcode manually">
-                <button onclick="addManualBarcode()" class="button">Add Manually</button>
-            </div>
-        </div>
-
-        <div class="item-list" id="itemsList"></div>
-
-        <button onclick="submitData()" class="button button-primary">Submit Data</button>
+    <h1>Barcode Scanner</h1>
+    <div id="scanner-container">
+        <video id="video"></video>
     </div>
+    <button id="scan-button">Start Scanning</button>
+    <div id="result">Scan result will appear here</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@latest/minified/html5-qrcode.min.js"></script>
     <script>
-        let scannedItems = [];
-        let html5QrCode = null;
-        const toggleScannerBtn = document.getElementById('toggle-scanner');
-
-        // Scanner initialization
-        async function initScanner() {
-            try {
-                const cameras = await Html5Qrcode.getCameras();
-                if (cameras.length === 0) {
-                    throw new Error('No cameras found');
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        let scanning = false;
+        const scanButton = document.getElementById('scan-button');
+        const resultElement = document.getElementById('result');
+        
+        // Get list of available video devices
+        codeReader.listVideoInputDevices()
+            .then(videoInputDevices => {
+                if (videoInputDevices.length === 0) {
+                    resultElement.textContent = 'No video devices found';
+                    return;
                 }
-
-                html5QrCode = new Html5Qrcode("scanner-view");
-                const cameraId = cameras[0].id;
-
-                await html5QrCode.start(
-                    cameraId,
-                    {
-                        fps: 10,
-                        qrbox: { width: 250, height: 250 }
-                    },
-                    handleScanSuccess,
-                    onScanError
-                );
                 
-                toggleScannerBtn.textContent = 'Stop Scanner';
-            } catch (err) {
-                console.error('Camera error:', err);
-                alert(`Camera error: ${err.message}`);
-                stopScanner();
-            }
-        }
+                // Try to use back camera first if available
+                const backCamera = videoInputDevices.find(device => 
+                    device.label.toLowerCase().includes('back'));
+                const deviceId = backCamera?.deviceId || videoInputDevices[0].deviceId;
 
-        function handleScanSuccess(barcode) {
-            addScannedItem(barcode);
-            stopScanner();
-        }
-
-        function onScanError(error) {
-            console.error('Scan error:', error);
-        }
-
-        async function stopScanner() {
-            if (html5QrCode && html5QrCode.isScanning) {
-                try {
-                    await html5QrCode.stop();
-                    toggleScannerBtn.textContent = 'Start Scanner';
-                    html5QrCode = null;
-                } catch (err) {
-                    console.error('Error stopping scanner:', err);
-                }
-            }
-        }
-
-        toggleScannerBtn.addEventListener('click', () => {
-            if (!html5QrCode || !html5QrCode.isScanning) {
-                initScanner();
-            } else {
-                stopScanner();
-            }
-        });
-
-        // Rest of the functions remain the same
-        function addScannedItem(barcode, quantity = 1) {
-            scannedItems.push({
-                barcode: barcode,
-                quantity: quantity,
-                timestamp: new Date().toISOString()
-            });
-            updateItemsList();
-        }
-
-        function addManualBarcode() {
-            const manualBarcode = document.getElementById('manualBarcode').value;
-            if (manualBarcode) {
-                addScannedItem(manualBarcode);
-                document.getElementById('manualBarcode').value = '';
-            }
-        }
-
-        function updateItemsList() {
-            const itemsList = document.getElementById('itemsList');
-            itemsList.innerHTML = scannedItems.map((item, index) => `
-                <div class="item">
-                    Barcode: ${item.barcode}<br>
-                    Quantity: <input type="number" value="${item.quantity}" 
-                              onchange="updateQuantity(${index}, this.value)">
-                    <button onclick="removeItem(${index})" class="button button-small">Remove</button>
-                </div>
-            `).join('');
-        }
-
-        function updateQuantity(index, newQuantity) {
-            scannedItems[index].quantity = parseInt(newQuantity) || 1;
-        }
-
-        function removeItem(index) {
-            scannedItems.splice(index, 1);
-            updateItemsList();
-        }
-
-        async function submitData() {
-            const userSelect = document.getElementById('userSelect');
-            const userError = document.getElementById('userError');
-            const user = userSelect.value;
-
-            userSelect.classList.remove('invalid');
-            userError.style.display = 'none';
-
-            if (!user) {
-                userSelect.classList.add('invalid');
-                userError.style.display = 'block';
-                userSelect.focus();
-                return;
-            }
-
-            if (scannedItems.length === 0) {
-                alert('No items to submit');
-                return;
-            }
-
-            const payload = {
-                user: user,
-                items: scannedItems
-            };
-
-            try {
-                const response = await fetch('https://script.google.com/macros/s/AKfycbwDemIpraMFxHBZx_OtzfJqPGbBoXlTCqfxW1P0y2XSh3JLoqd4xjnyOVPY8fqOTOW8/exec', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(payload)
+                scanButton.addEventListener('click', () => {
+                    if (!scanning) {
+                        startScanning(deviceId);
+                    } else {
+                        stopScanning();
+                    }
                 });
+            })
+            .catch(err => {
+                console.error(err);
+                resultElement.textContent = 'Error accessing camera: ' + err.message;
+            });
 
-                if (response.ok) {
-                    alert('Data submitted successfully!');
-                    scannedItems = [];
-                    updateItemsList();
-                    userSelect.value = '';
+        function startScanning(deviceId) {
+            codeReader.decodeFromVideoDevice(deviceId, 'video', (result, err) => {
+                if (result) {
+                    resultElement.textContent = result.text;
+                    stopScanning();
                 }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Submission failed: ' + error.message);
-            }
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error(err);
+                    resultElement.textContent = 'Error: ' + err.message;
+                    stopScanning();
+                }
+            }).then(() => {
+                scanning = true;
+                scanButton.textContent = 'Stop Scanning';
+            });
         }
 
-        // User selection validation
-        document.getElementById('userSelect').addEventListener('change', function() {
-            if (this.value) {
-                this.classList.remove('invalid');
-                document.getElementById('userError').style.display = 'none';
+        function stopScanning() {
+            codeReader.reset();
+            scanning = false;
+            scanButton.textContent = 'Start Scanning';
+        }
+
+        // Clean up when page is closed
+        window.addEventListener('beforeunload', () => {
+            if (scanning) {
+                codeReader.reset();
             }
         });
     </script>
