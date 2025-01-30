@@ -1,29 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>Inventory Scanner</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        /* Add error message styling */
-        .error-message {
-            color: #dc3545;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #dc3545;
-            border-radius: 4px;
-            display: none;
-        }
-        
-        #camera-error {
-            background: #ffe6e6;
-        }
-
-        #fallback-ui {
-            background: #e6f3ff;
-        }
-
-        /* Existing styles remain */
         body { font-family: Arial; margin: 0; padding: 15px; }
         #reader { width: 100%; height: 60vh; border: 2px solid #ddd; }
         .input-group { margin: 15px 0; }
@@ -32,19 +13,16 @@
     </style>
 </head>
 <body>
-    <!-- Error Messages -->
-    <div id="camera-error" class="error-message"></div>
-    <div id="fallback-ui" class="error-message" style="display: none;">
-        <p>Camera unavailable. Manual entry:</p>
-        <input type="text" id="manual-barcode" placeholder="Enter barcode">
-        <button onclick="handleManualEntry()">Add Barcode</button>
-    </div>
-
-    <!-- Existing Scanner UI -->
     <div id="reader"></div>
+    
+    <div class="input-group">
+        <input type="number" id="quantity" value="1" min="1">
+    </div>
+    
     <div class="input-group">
         <input type="text" id="username" placeholder="Your Name" required>
     </div>
+
     <button onclick="toggleScanner()">Start Scanning</button>
 
     <script>
@@ -52,155 +30,226 @@
         const SECRET_KEY = "amb2025";
         let scanner = null;
 
-        // Camera state detection
-        const cameraState = {
-            isSupported: () => 'mediaDevices' in navigator && 
-                             'getUserMedia' in navigator.mediaDevices,
-            
-            checkPermission: async () => {
-                try {
-                    const permission = await navigator.permissions.query({ name: 'camera' });
-                    return permission.state === 'granted';
-                } catch {
-                    return false;
-                }
-            }
-        };
-
-        async function toggleScanner() {
+        function toggleScanner() {
             if (!scanner) {
-                await initializeScanner();
+                startScanner();
             } else {
                 stopScanner();
             }
         }
 
-        async function initializeScanner() {
-            clearErrorMessages();
-            
-            if (!cameraState.isSupported()) {
-                showError("Camera not supported on this device", true);
-                return;
-            }
-
-            try {
-                await verifyCameraAccess();
-                startScannerUI();
-            } catch (error) {
-                handleCameraError(error);
-            }
-        }
-
-        async function verifyCameraAccess() {
-            try {
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                return true;
-            } catch (error) {
-                handleCameraError(error);
-                throw error;
-            }
-        }
-
-        function startScannerUI() {
+        function startScanner() {
             scanner = new Html5QrcodeScanner('reader', {
                 qrbox: 250,
                 fps: 5,
                 formats: ['upc_a', 'ean_13', 'code_128']
             });
 
-            scanner.render((barcode) => {
-                handleSuccessfulScan(barcode);
-            }).catch(error => {
-                handleCameraError(error);
+            scanner.render(async (barcode) => {
+                await logScan(barcode);
+                scanner.clear();
+                scanner = null;
             });
 
-            updateButtonState(true);
-        }
-
-        function handleCameraError(error) {
-            console.error('Camera Error:', error);
-            const errorMap = {
-                NotAllowedError: {
-                    message: "Camera permission denied. Please enable camera access in browser settings.",
-                    fallback: true
-                },
-                NotFoundError: {
-                    message: "No camera detected. Please check your device hardware.",
-                    fallback: true
-                },
-                NotSupportedError: {
-                    message: "Secure connection required. Please use HTTPS.",
-                    fallback: false
-                },
-                SecurityError: {
-                    message: "Camera access blocked by security policy.",
-                    fallback: true
-                }
-            };
-
-            const errorInfo = errorMap[error.name] || { 
-                message: "Camera initialization failed", 
-                fallback: true 
-            };
-
-            showError(errorInfo.message, errorInfo.fallback);
-            stopScanner();
-        }
-
-        function handleSuccessfulScan(barcode) {
-            // Your existing scan handling logic
-            console.log('Scanned:', barcode);
-            // Add to batch or direct processing
-        }
-
-        function showError(message, showFallback = false) {
-            const errorDiv = document.getElementById('camera-error');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-
-            if (showFallback) {
-                document.getElementById('fallback-ui').style.display = 'block';
-            }
-        }
-
-        function clearErrorMessages() {
-            document.querySelectorAll('.error-message').forEach(el => {
-                el.style.display = 'none';
-                el.textContent = '';
-            });
+            document.querySelector('button').textContent = "Stop Scanning";
         }
 
         function stopScanner() {
             if (scanner) {
-                scanner.clear().catch(error => {
-                    console.error('Scanner cleanup error:', error);
-                });
+                scanner.clear();
                 scanner = null;
             }
-            updateButtonState(false);
+            document.querySelector('button').textContent = "Start Scanning";
         }
 
-        function updateButtonState(isScanning) {
-            const btn = document.querySelector('button');
-            btn.textContent = isScanning ? "Stop Scanning" : "Start Scanning";
-            btn.style.background = isScanning ? "#dc3545" : "#4285f4";
-        }
+        async function logScan(barcode) {
+            const payload = {
+                secret: SECRET_KEY,
+                barcode: barcode,
+                quantity: document.getElementById('quantity').value,
+                user: document.getElementById('username').value,
+                location: navigator.geolocation ? await getLocation() : ""
+            };
 
-        // Fallback manual entry
-        function handleManualEntry() {
-            const barcode = document.getElementById('manual-barcode').value;
-            if (barcode) {
-                handleSuccessfulScan(barcode);
-                document.getElementById('manual-barcode').value = '';
+            try {
+                const response = await fetch(APP_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    alert('Scan logged successfully!');
+                    document.getElementById('quantity').value = 1;
+                } else {
+                    alert('Error: ' + (await response.text()));
+                }
+            } catch (error) {
+                alert('Network error: ' + error.message);
             }
         }
 
-        // Initial check
-        window.addEventListener('load', async () => {
-            if (!cameraState.isSupported()) {
-                showError("Camera API not supported in this browser", true);
+        function getLocation() {
+            return new Promise((resolve) => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => resolve(`${pos.coords.latitude},${pos.coords.longitude}`),
+                    () => resolve("")
+                );
+            });
+        }
+    </script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Scanner</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        /* Add to existing styles */
+        #batch-list { 
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .batch-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .batch-actions { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <!-- Add after existing elements -->
+    <div id="batch-list"></div>
+    <div class="batch-actions">
+        <button onclick="submitBatch()" style="background: #28a745;">Save Batch (0)</button>
+        <button onclick="clearBatch()" style="background: #dc3545;">Clear Batch</button>
+    </div>
+
+    <script>
+        let currentBatch = [];
+        let scanner = null;
+
+        // Modified scanner render function
+        function startScanner() {
+            scanner = new Html5QrcodeScanner('reader', {
+                qrbox: 250,
+                fps: 5,
+                formats: ['upc_a', 'ean_13', 'code_128']
+            });
+
+            scanner.render(async (barcode) => {
+                addToBatch(barcode);
+                // Keep scanner active for next scan
+                document.getElementById('reader').scrollIntoView();
+            });
+
+            document.querySelector('button').textContent = "Stop Scanning";
+        }
+
+        function addToBatch(barcode) {
+            const existing = currentBatch.find(item => item.barcode === barcode);
+            
+            if (existing) {
+                existing.quantity++;
+            } else {
+                currentBatch.push({
+                    barcode,
+                    quantity: 1,
+                    timestamp: new Date().toISOString()
+                });
             }
-        });
+
+            updateBatchDisplay();
+        }
+
+        function updateBatchDisplay() {
+            const list = document.getElementById('batch-list');
+            const saveBtn = document.querySelector('.batch-actions button');
+            
+            // Update save button count
+            saveBtn.textContent = `Save Batch (${currentBatch.length})`;
+            
+            // Clear existing list
+            list.innerHTML = '';
+            
+            // Add new items
+            currentBatch.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'batch-item';
+                div.innerHTML = `
+                    <div>
+                        ${item.barcode} 
+                        <small>(x${item.quantity})</small>
+                    </div>
+                    <div>
+                        <button onclick="adjustQuantity(${index}, 1)">+</button>
+                        <button onclick="adjustQuantity(${index}, -1)">-</button>
+                        <button onclick="removeItem(${index})">×</button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function adjustQuantity(index, delta) {
+            const newQuantity = currentBatch[index].quantity + delta;
+            if (newQuantity > 0) {
+                currentBatch[index].quantity = newQuantity;
+                updateBatchDisplay();
+            }
+        }
+
+        function removeItem(index) {
+            currentBatch.splice(index, 1);
+            updateBatchDisplay();
+        }
+
+        async function submitBatch() {
+            if (currentBatch.length === 0) return;
+
+            const user = document.getElementById('username').value;
+            if (!user) {
+                alert('Please enter your name');
+                return;
+            }
+
+            const payload = {
+                secret: SECRET_KEY,
+                user: user,
+                batch: currentBatch
+            };
+
+            try {
+                const response = await fetch(APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    alert(`Saved ${result.processed} items!`);
+                    clearBatch();
+                } else {
+                    alert(`Error: ${result.message}`);
+                }
+            } catch (error) {
+                alert('Submission failed: ' + error.message);
+            }
+        }
+
+        function clearBatch() {
+            currentBatch = [];
+            updateBatchDisplay();
+        }
     </script>
 </body>
 </html>
