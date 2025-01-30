@@ -19,13 +19,15 @@
     <div class="container">
         <h3>Barcode Scanner</h3>
         
-        <!-- User Selection -->
-        <select id="userSelect" class="float-right">
-            <option value="">Select User</option>
-            <option value="User1">User 1</option>
-            <option value="User2">User 2</option>
-            <option value="User3">User 3</option>
-        </select>
+<div class="select-container">
+    <label for="userSelect">Select User:</label>
+    <select id="userSelect" required>
+        <option value="" disabled selected>Choose user...</option>
+        <option value="User1">User 1</option>
+        <option value="User2">User 2</option>
+        <option value="User3">User 3</option>
+    </select>
+</div>
         
         <!-- Scanner Section -->
         <div id="scanner-container">
