@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barcode Scanner</title>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body {
             margin: 0;
@@ -53,21 +53,12 @@
             max-width: 600px;
             word-break: break-all;
         }
-
-        #camera-select {
-            margin: 10px;
-            display: none;
-        }
     </style>
 </head>
 <body>
     <h1>Barcode Scanner</h1>
     <div id="scanner-container">
         <video id="video"></video>
-    </div>
-    <div id="camera-select">
-        <label for="cameras">Select Camera: </label>
-        <select id="cameras"></select>
     </div>
     <button id="scan-button">Start Scanning</button>
     <div id="result">Scan result will appear here</div>
@@ -77,20 +68,7 @@
         let scanning = false;
         const scanButton = document.getElementById('scan-button');
         const resultElement = document.getElementById('result');
-        const cameraSelect = document.getElementById('cameras');
-
-        // Configure supported formats
-        codeReader.hints = new Map([
-            [ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                ZXing.BarcodeFormat.QR_CODE,
-                ZXing.BarcodeFormat.UPC_A,
-                ZXing.BarcodeFormat.EAN_13,
-                ZXing.BarcodeFormat.CODE_128,
-                ZXing.BarcodeFormat.CODE_39,
-                ZXing.BarcodeFormat.ITF
-            ]]
-        ]);
-
+        
         // Get list of available video devices
         codeReader.listVideoInputDevices()
             .then(videoInputDevices => {
@@ -98,39 +76,24 @@
                     resultElement.textContent = 'No video devices found';
                     return;
                 }
+                
+                // Try to use back camera first if available
+                const backCamera = videoInputDevices.find(device => 
+                    device.label.toLowerCase().includes('back'));
+                const deviceId = backCamera?.deviceId || videoInputDevices[0].deviceId;
 
-                // Populate camera selection
-                if (videoInputDevices.length > 1) {
-                    cameraSelect.style.display = 'block';
-                    videoInputDevices.forEach(device => {
-                        const option = document.createElement('option');
-                        option.value = device.deviceId;
-                        option.text = device.label || `Camera ${cameraSelect.length + 1}`;
-                        cameraSelect.appendChild(option);
-                    });
-                }
-
-                // Camera selection handler
-                cameraSelect.addEventListener('change', () => {
-                    if (scanning) stopScanning();
-                    startScanning(cameraSelect.value);
+                scanButton.addEventListener('click', () => {
+                    if (!scanning) {
+                        startScanning(deviceId);
+                    } else {
+                        stopScanning();
+                    }
                 });
-
-                // Start with first camera by default
-                startScanning(videoInputDevices[0].deviceId);
             })
             .catch(err => {
-                console.error('Device List Error:', err);
+                console.error(err);
                 resultElement.textContent = 'Error accessing camera: ' + err.message;
             });
-
-        scanButton.addEventListener('click', () => {
-            if (!scanning) {
-                startScanning(cameraSelect.value);
-            } else {
-                stopScanning();
-            }
-        });
 
         function startScanning(deviceId) {
             codeReader.decodeFromVideoDevice(deviceId, 'video', (result, err) => {
@@ -138,20 +101,14 @@
                     resultElement.textContent = result.text;
                     stopScanning();
                 }
-                if (err) {
-                    if (!(err instanceof ZXing.NotFoundException)) {
-                        console.error('Scan Error:', err);
-                        resultElement.textContent = `Error: ${err.message}`;
-                        stopScanning();
-                    }
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.error(err);
+                    resultElement.textContent = 'Error: ' + err.message;
+                    stopScanning();
                 }
             }).then(() => {
                 scanning = true;
                 scanButton.textContent = 'Stop Scanning';
-                console.log(`Started scanning with camera: ${deviceId}`);
-            }).catch(err => {
-                console.error('Start Scanner Error:', err);
-                resultElement.textContent = `Failed to start scanner: ${err.message}`;
             });
         }
 
@@ -159,9 +116,9 @@
             codeReader.reset();
             scanning = false;
             scanButton.textContent = 'Start Scanning';
-            console.log('Scanning stopped');
         }
 
+        // Clean up when page is closed
         window.addEventListener('beforeunload', () => {
             if (scanning) {
                 codeReader.reset();
