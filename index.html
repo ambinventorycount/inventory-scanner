@@ -24,9 +24,17 @@
             align-items: center;
         }
         .batch-actions { margin-top: 10px; }
+        .error {
+            color: red;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid red;
+            display: none;
+        }
     </style>
 </head>
 <body>
+    <div class="error" id="camera-error"></div>
     <div id="reader"></div>
     
     <div class="input-group">
@@ -48,46 +56,82 @@
         let scanner = null;
         let currentBatch = [];
 
-        function toggleScanner() {
-            if (!scanner) {
-                startScanner();
-            } else {
-                stopScanner();
+        async function toggleScanner() {
+            try {
+                if (!scanner) {
+                    await initializeCamera();
+                } else {
+                    stopScanner();
+                }
+            } catch (error) {
+                showCameraError(error);
             }
         }
 
-        function startScanner() {
+        async function initializeCamera() {
+            if (!Html5Qrcode.getCameras) {
+                throw new Error('Browser does not support camera access');
+            }
+
+            const cameras = await Html5Qrcode.getCameras();
+            if (cameras.length === 0) {
+                throw new Error('No cameras found');
+            }
+
             scanner = new Html5QrcodeScanner('reader', {
-                qrbox: 250,
+                qrbox: { width: 250, height: 250 },
                 fps: 5,
-                formats: ['upc_a', 'ean_13', 'code_128']
+                formats: ['upc_a', 'ean_13', 'code_128'],
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true
+                },
+                rememberLastUsedCamera: true
             });
 
-            scanner.render((barcode) => {
-                addToBatch(barcode);
-                document.getElementById('reader').scrollIntoView();
-            });
+            scanner.render(
+                (barcode) => {
+                    addToBatch(barcode);
+                    document.getElementById('reader').scrollIntoView();
+                },
+                (error) => {
+                    showCameraError(error);
+                    stopScanner();
+                }
+            );
 
             document.querySelector('button').textContent = "Stop Scanning";
         }
 
+        function showCameraError(error) {
+            const errorElement = document.getElementById('camera-error');
+            errorElement.style.display = 'block';
+            
+            const errorMessages = {
+                'NotAllowedError': 'Camera access denied. Please enable permissions in browser settings.',
+                'NotFoundError': 'No camera detected. Check device hardware.',
+                'NotSupportedError': 'Requires HTTPS connection.',
+                'SecurityError': 'Blocked by security restrictions.'
+            };
+
+            errorElement.textContent = errorMessages[error.name] || `Camera error: ${error.message}`;
+        }
+
         function stopScanner() {
             if (scanner) {
-                scanner.clear();
+                scanner.clear().catch(console.error);
                 scanner = null;
             }
             document.querySelector('button').textContent = "Start Scanning";
+            document.getElementById('camera-error').style.display = 'none';
         }
 
         function addToBatch(barcode) {
             const existing = currentBatch.find(item => item.barcode === barcode);
-            
             existing ? existing.quantity++ : currentBatch.push({
                 barcode,
                 quantity: 1,
                 timestamp: new Date().toISOString()
             });
-
             updateBatchDisplay();
         }
 
@@ -143,8 +187,10 @@
 
         function adjustQuantity(index, delta) {
             const newQty = currentBatch[index].quantity + delta;
-            if (newQty > 0) currentBatch[index].quantity = newQty;
-            updateBatchDisplay();
+            if (newQty > 0) {
+                currentBatch[index].quantity = newQty;
+                updateBatchDisplay();
+            }
         }
 
         function removeItem(index) {
