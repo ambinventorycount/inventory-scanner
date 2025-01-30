@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Scanner</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        /* Add error message styling */
+        .error-message {
+            color: #dc3545;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #dc3545;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        #camera-error {
+            background: #ffe6e6;
+        }
+
+        #fallback-ui {
+            background: #e6f3ff;
+        }
+
+        /* Existing styles remain */
+        body { font-family: Arial; margin: 0; padding: 15px; }
+        #reader { width: 100%; height: 60vh; border: 2px solid #ddd; }
+        .input-group { margin: 15px 0; }
+        input, button { width: 100%; padding: 12px; margin: 5px 0; }
+        button { background: #4285f4; color: white; border: none; }
+    </style>
+</head>
+<body>
+    <!-- Error Messages -->
+    <div id="camera-error" class="error-message"></div>
+    <div id="fallback-ui" class="error-message" style="display: none;">
+        <p>Camera unavailable. Manual entry:</p>
+        <input type="text" id="manual-barcode" placeholder="Enter barcode">
+        <button onclick="handleManualEntry()">Add Barcode</button>
+    </div>
+
+    <!-- Existing Scanner UI -->
+    <div id="reader"></div>
+    <div class="input-group">
+        <input type="text" id="username" placeholder="Your Name" required>
+    </div>
+    <button onclick="toggleScanner()">Start Scanning</button>
+
+    <script>
+        const APP_URL = "https://script.google.com/macros/s/AKfycbxgURydXrDbAvsHHFQ37UtfHX5z_8jt_bX41hEjakRLfkePMsAylHItW189HUmegF4/exec";
+        const SECRET_KEY = "amb2025";
+        let scanner = null;
+
+        // Camera state detection
+        const cameraState = {
+            isSupported: () => 'mediaDevices' in navigator && 
+                             'getUserMedia' in navigator.mediaDevices,
+            
+            checkPermission: async () => {
+                try {
+                    const permission = await navigator.permissions.query({ name: 'camera' });
+                    return permission.state === 'granted';
+                } catch {
+                    return false;
+                }
+            }
+        };
+
+        async function toggleScanner() {
+            if (!scanner) {
+                await initializeScanner();
+            } else {
+                stopScanner();
+            }
+        }
+
+        async function initializeScanner() {
+            clearErrorMessages();
+            
+            if (!cameraState.isSupported()) {
+                showError("Camera not supported on this device", true);
+                return;
+            }
+
+            try {
+                await verifyCameraAccess();
+                startScannerUI();
+            } catch (error) {
+                handleCameraError(error);
+            }
+        }
+
+        async function verifyCameraAccess() {
+            try {
+                await navigator.mediaDevices.getUserMedia({ video: true });
+                return true;
+            } catch (error) {
+                handleCameraError(error);
+                throw error;
+            }
+        }
+
+        function startScannerUI() {
+            scanner = new Html5QrcodeScanner('reader', {
+                qrbox: 250,
+                fps: 5,
+                formats: ['upc_a', 'ean_13', 'code_128']
+            });
+
+            scanner.render((barcode) => {
+                handleSuccessfulScan(barcode);
+            }).catch(error => {
+                handleCameraError(error);
+            });
+
+            updateButtonState(true);
+        }
+
+        function handleCameraError(error) {
+            console.error('Camera Error:', error);
+            const errorMap = {
+                NotAllowedError: {
+                    message: "Camera permission denied. Please enable camera access in browser settings.",
+                    fallback: true
+                },
+                NotFoundError: {
+                    message: "No camera detected. Please check your device hardware.",
+                    fallback: true
+                },
+                NotSupportedError: {
+                    message: "Secure connection required. Please use HTTPS.",
+                    fallback: false
+                },
+                SecurityError: {
+                    message: "Camera access blocked by security policy.",
+                    fallback: true
+                }
+            };
+
+            const errorInfo = errorMap[error.name] || { 
+                message: "Camera initialization failed", 
+                fallback: true 
+            };
+
+            showError(errorInfo.message, errorInfo.fallback);
+            stopScanner();
+        }
+
+        function handleSuccessfulScan(barcode) {
+            // Your existing scan handling logic
+            console.log('Scanned:', barcode);
+            // Add to batch or direct processing
+        }
+
+        function showError(message, showFallback = false) {
+            const errorDiv = document.getElementById('camera-error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+
+            if (showFallback) {
+                document.getElementById('fallback-ui').style.display = 'block';
+            }
+        }
+
+        function clearErrorMessages() {
+            document.querySelectorAll('.error-message').forEach(el => {
+                el.style.display = 'none';
+                el.textContent = '';
+            });
+        }
+
+        function stopScanner() {
+            if (scanner) {
+                scanner.clear().catch(error => {
+                    console.error('Scanner cleanup error:', error);
+                });
+                scanner = null;
+            }
+            updateButtonState(false);
+        }
+
+        function updateButtonState(isScanning) {
+            const btn = document.querySelector('button');
+            btn.textContent = isScanning ? "Stop Scanning" : "Start Scanning";
+            btn.style.background = isScanning ? "#dc3545" : "#4285f4";
+        }
+
+        // Fallback manual entry
+        function handleManualEntry() {
+            const barcode = document.getElementById('manual-barcode').value;
+            if (barcode) {
+                handleSuccessfulScan(barcode);
+                document.getElementById('manual-barcode').value = '';
+            }
+        }
+
+        // Initial check
+        window.addEventListener('load', async () => {
+            if (!cameraState.isSupported()) {
+                showError("Camera API not supported in this browser", true);
+            }
+        });
+    </script>
+</body>
+</html>
