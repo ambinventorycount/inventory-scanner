@@ -5,58 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barcode Scanner</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .manual-disabled { background-color: #e9ecef !important; }
-    </style>
 </head>
 <body class="container mt-4">
-    <h2 class="mb-4">Ambient inventory Barcode Scanner</h2>
+    <h2 class="mb-4">Barcode Scanner</h2>
     
-    <div class="alert alert-warning" id="browser-support" style="display: none;">
-        Your browser doesn't support the Barcode Detection API. Scanning functionality is limited.
-    </div>
-
-    <button class="btn btn-primary mb-2" id="scan-item-btn">Scan Item Barcode</button>
-    <button class="btn btn-primary mb-4" id="scan-serial-btn">Scan Serial Barcode</button>
+    <button class="btn btn-primary mb-2" onclick="startScanner('item')">Scan Item Barcode</button>
+    <button class="btn btn-primary mb-4" onclick="startScanner('serial')">Scan Serial Barcode</button>
 
     <div class="mb-3">
         <input type="text" id="item" class="form-control mb-2" placeholder="Item Barcode">
         <input type="text" id="serial" class="form-control" placeholder="Serial Barcode">
     </div>
 
-    <button class="btn btn-secondary mb-2" id="manual-entry-btn">Enable Manual Entry</button>
-    <button class="btn btn-success mb-4" id="save-btn">Save Record</button>
+    <button class="btn btn-secondary mb-2" onclick="toggleManualEntry()">Manual Entry</button>
+    <button class="btn btn-success mb-4" onclick="saveToGoogleSheets()">Save Record</button>
 
-    <div id="scanner-container" class="text-center" style="display: none;">
+    <div id="scanner-container" style="display: none;">
         <video id="video" width="100%" height="300px" style="border: 2px solid #666;"></video>
         <button class="btn btn-danger mt-2" onclick="stopScanner()">Stop Scanner</button>
     </div>
-
-    <div class="alert alert-info mt-3" id="status-message" style="display: none;"></div>
 
     <script>
         let currentScannerType = '';
         let mediaStream = null;
         let detectionInterval = null;
-        let isManualEntryEnabled = false;
-        const supportedFormats = ['code_128', 'code_39', 'qr_code'];
-        const scanButtons = {
-            item: document.getElementById('scan-item-btn'),
-            serial: document.getElementById('scan-serial-btn')
-        };
 
-        // Initialize browser support check
-        (function init() {
-            if (!('BarcodeDetector' in window)) {
-                document.getElementById('browser-support').style.display = 'block';
-                Object.values(scanButtons).forEach(btn => btn.disabled = true);
-            }
-        })();
+        // Check for Barcode Detection API support
+        const isBarcodeDetectorSupported = ('BarcodeDetector' in window);
 
         async function startScanner(type) {
             currentScannerType = type;
-            showScannerUI();
-            disableScanButtons();
+            const scannerContainer = document.getElementById('scanner-container');
+            scannerContainer.style.display = 'block';
 
             try {
                 mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -66,129 +46,70 @@
                 const video = document.getElementById('video');
                 video.srcObject = mediaStream;
                 await video.play();
-                setupBarcodeDetection(video);
+
+                if (isBarcodeDetectorSupported) {
+                    const barcodeDetector = new BarcodeDetector();
+                    detectionInterval = setInterval(async () => {
+                        try {
+                            const barcodes = await barcodeDetector.detect(video);
+                            if (barcodes.length > 0) {
+                                document.getElementById(currentScannerType).value = barcodes[0].rawValue;
+                                stopScanner();
+                            }
+                        } catch (err) {
+                            console.error('Barcode detection error:', err);
+                        }
+                    }, 500);
+                } else {
+                    alert('Barcode Detection API not supported in this browser');
+                }
             } catch (err) {
-                handleCameraError(err);
+                console.error('Camera access error:', err);
+                alert('Camera access denied or not available');
             }
         }
 
-        function setupBarcodeDetection(video) {
-            const barcodeDetector = new BarcodeDetector({ formats: supportedFormats });
-            detectionInterval = setInterval(async () => {
-                try {
-                    const barcodes = await barcodeDetector.detect(video);
-                    if (barcodes.length > 0) {
-                        handleDetectedBarcode(barcodes[0].rawValue);
-                    }
-                } catch (err) {
-                    console.error('Barcode detection error:', err);
-                }
-            }, 100);
-        }
-
-        function handleDetectedBarcode(value) {
-            document.getElementById(currentScannerType).value = value;
-            showStatusMessage(`Scanned ${currentScannerType} barcode: ${value}`, 'success');
-            stopScanner();
-            enableScanButtons();
-        }
-
-        function handleCameraError(err) {
-            console.error('Camera access error:', err);
-            showStatusMessage('Camera access denied or not available', 'danger');
-            stopScanner();
-            enableScanButtons();
-        }
-
         function stopScanner() {
-            if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
             if (detectionInterval) clearInterval(detectionInterval);
             document.getElementById('scanner-container').style.display = 'none';
         }
 
+        // Rest of the functions remain the same as original
         function toggleManualEntry() {
-            isManualEntryEnabled = !isManualEntryEnabled;
-            const inputs = document.querySelectorAll('input');
-            const btn = document.getElementById('manual-entry-btn');
-            
-            inputs.forEach(input => {
-                input.disabled = !isManualEntryEnabled;
-                input.classList.toggle('manual-disabled');
+            document.querySelectorAll('input').forEach(input => {
+                input.disabled = !input.disabled;
             });
-            
-            btn.textContent = isManualEntryEnabled ? 'Disable Manual Entry' : 'Enable Manual Entry';
-            btn.classList.toggle('btn-secondary');
-            btn.classList.toggle('btn-warning');
         }
 
         async function saveToGoogleSheets() {
-            const item = document.getElementById('item').value.trim();
-            const serial = document.getElementById('serial').value.trim();
+            const item = document.getElementById('item').value;
+            const serial = document.getElementById('serial').value;
             
             if (!item || !serial) {
-                showStatusMessage('Please fill in both barcode fields', 'danger');
+                alert('Please fill in both barcode fields.');
                 return;
             }
 
             const scriptURL = 'https://script.google.com/macros/s/AKfycbyhMRU0DcDquqbamt5vSRBheJDIzEFcGnwgVZJ7H7fH4DbjJgFllr59xXjAWVElzpqKPg/exec';
             
             try {
-                const response = await fetch(scriptURL, {
+                await fetch(scriptURL, {
                     method: 'POST',
+                    mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        item, 
-                        serial, 
-                        timestamp: new Date().toISOString() 
-                    })
+                    body: JSON.stringify({ item, serial, timestamp: new Date().toISOString() })
                 });
-
-                if (!response.ok) throw new Error('Server error');
-                
-                showStatusMessage('Data saved successfully!', 'success');
-                clearInputFields();
+                alert('Data saved!');
+                document.getElementById('item').value = '';
+                document.getElementById('serial').value = '';
             } catch (error) {
                 console.error('Error:', error);
-                showStatusMessage('Save failed. Please try again.', 'danger');
+                alert('Save failed. Check console.');
             }
         }
-
-        // Helper functions
-        function showScannerUI() {
-            document.getElementById('scanner-container').style.display = 'block';
-        }
-
-        function disableScanButtons() {
-            Object.values(scanButtons).forEach(btn => btn.disabled = true);
-        }
-
-        function enableScanButtons() {
-            Object.values(scanButtons).forEach(btn => btn.disabled = false);
-        }
-
-        function showStatusMessage(message, type) {
-            const statusEl = document.getElementById('status-message');
-            statusEl.textContent = message;
-            statusEl.className = `alert alert-${type}`;
-            statusEl.style.display = 'block';
-            setTimeout(() => statusEl.style.display = 'none', 3000);
-        }
-
-        function clearInputFields() {
-            document.getElementById('item').value = '';
-            document.getElementById('serial').value = '';
-        }
-
-        // Event listeners
-        document.getElementById('scan-item-btn').addEventListener('click', () => startScanner('item'));
-        document.getElementById('scan-serial-btn').addEventListener('click', () => startScanner('serial'));
-        document.getElementById('manual-entry-btn').addEventListener('click', toggleManualEntry);
-        document.getElementById('save-btn').addEventListener('click', saveToGoogleSheets);
-
-        // Cleanup on window close
-        window.addEventListener('beforeunload', () => {
-            stopScanner();
-        });
     </script>
 </body>
 </html>
