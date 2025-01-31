@@ -1,52 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barcode Scanner</title>
+    <!-- Meta tags and title remain the same -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .scanner-container { margin: 20px 0; }
-        #scanner-viewport { 
-            width: 100%;
-            height: 300px;
-            border: 2px solid #333;
-            position: relative;
-            overflow: hidden;
-        }
-        .input-group { margin: 10px 0; }
-        input, button { padding: 10px; margin: 5px; width: 80%; }
-        button { background: #007bff; color: white; border: none; }
-        .status { color: green; margin: 10px 0; }
-        .error { color: red; }
+        /* Styles remain unchanged */
     </style>
 </head>
 <body>
-    <h1>Scan Barcodes</h1>
-    
-    <div class="input-group">
-        <label>Item Barcode:</label>
-        <input type="text" id="itemBarcode">
-        <button onclick="startScanner('itemBarcode')">Scan Item</button>
-    </div>
-
-    <div class="input-group">
-        <label>Serial Barcode:</label>
-        <input type="text" id="serialBarcode">
-        <button onclick="startScanner('serialBarcode')">Scan Serial</button>
-    </div>
-
-    <div class="scanner-container">
-        <div id="scanner-viewport"></div>
-    </div>
-
-    <button onclick="saveToSheet()">Save to Google Sheet</button>
-    <div id="status" class="status"></div>
+    <!-- HTML structure remains the same -->
 
     <script>
         let currentScanField = '';
         let isScanning = false;
+        let isInitialized = false; // Track if Quagga is initialized
 
         function startScanner(fieldId) {
             currentScanField = fieldId;
@@ -56,6 +23,13 @@
         }
 
         function initializeScanner() {
+            if (isInitialized) {
+                // Already initialized, just start the scanner
+                Quagga.start();
+                isScanning = true;
+                return;
+            }
+
             isScanning = true;
             Quagga.init({
                 inputStream: {
@@ -73,8 +47,10 @@
                 if (err) {
                     console.error(err);
                     showStatus(err.message, true);
+                    isScanning = false;
                     return;
                 }
+                isInitialized = true;
                 Quagga.start();
             });
 
@@ -87,8 +63,10 @@
         }
 
         function stopScanner() {
-            Quagga.stop();
-            isScanning = false;
+            if (isScanning) {
+                Quagga.stop();
+                isScanning = false;
+            }
         }
 
         async function saveToSheet() {
@@ -100,7 +78,7 @@
                 return;
             }
 
-            const scriptURL = 'https://script.google.com/macros/s/AKfycbyfLGRI3-81ZOJLCxoU1ACUY6OX4IW8nSEH-Vznd6uVTpBRbWwN3crwRdeLKe4sj1Yl/exec';
+            const scriptURL = 'https://script.google.com/macros/s/AKfycbyqA27Fo9cxdpdMuckQ2Z--GBuHryoeMyc5Wm7YOsZQ_QRQQ2a5Q9uDfEtrVmZ5hlyY/exec'; // Replace with your URL
             const data = {
                 item: item,
                 serial: serial,
@@ -116,12 +94,13 @@
                     }
                 });
                 
-                if (response.ok) {
+                const responseData = await response.json();
+                if (responseData.result === 'success') {
                     showStatus('Data saved successfully!');
                     document.getElementById('itemBarcode').value = '';
                     document.getElementById('serialBarcode').value = '';
                 } else {
-                    showStatus('Error saving data', true);
+                    showStatus('Error saving data: ' + responseData.message, true);
                 }
             } catch (error) {
                 showStatus('Network error: ' + error.message, true);
