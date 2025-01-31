@@ -3,235 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enhanced Barcode Scanner</title>
+    <title>Barcode Scanner</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-    <style>
-        /* [Keep existing styles] */
-        /* Added visual feedback for accessibility */
-        .accessibility-focus:focus {
-            outline: 3px solid #00ff00;
-            outline-offset: 2px;
-        }
-    </style>
 </head>
 <body class="container mt-4">
-    <h1 class="mb-4" aria-label="Enhanced Barcode Scanner">Enhanced Barcode Scanner</h1>
+    <h2 class="mb-4">Barcode Scanner</h2>
     
-    <!-- Added status region for accessibility -->
-    <div id="status-region" aria-live="polite" class="visually-hidden"></div>
+    <button class="btn btn-primary mb-2" onclick="startScanner('item')">Scan Item Barcode</button>
+    <button class="btn btn-primary mb-4" onclick="startScanner('serial')">Scan Serial Barcode</button>
 
-    <div class="btn-group mb-4" role="group">
-        <button class="btn btn-primary accessibility-focus" 
-                onclick="startScanner('item')" 
-                aria-label="Scan item barcode">
-            Scan Item Barcode
-        </button>
-        <button class="btn btn-primary accessibility-focus" 
-                onclick="startScanner('serial')" 
-                aria-label="Scan serial barcode">
-            Scan Serial Barcode
-        </button>
+    <div class="mb-3">
+        <input type="text" id="item" class="form-control mb-2" placeholder="Item Barcode">
+        <input type="text" id="serial" class="form-control" placeholder="Serial Barcode">
     </div>
 
-    <div class="mb-4">
-        <input type="text" id="item" class="form-control mb-2 accessibility-focus"
-               placeholder="Item Barcode (EAN/UPC)" 
-               aria-label="Item barcode input">
-        <input type="text" id="serial" class="form-control mb-2 accessibility-focus"
-               placeholder="Serial Barcode (Code 128/39)" 
-               aria-label="Serial barcode input">
-    </div>
+    <button class="btn btn-secondary mb-2" onclick="toggleManualEntry()">Manual Entry</button>
+    <button class="btn btn-success mb-4" onclick="saveToGoogleSheets()">Save Record</button>
 
-    <!-- [Keep existing button groups] -->
-
-    <div id="scanner-container" role="dialog" aria-modal="true" aria-labelledby="scannerTitle">
-        <h2 id="scannerTitle" class="visually-hidden">Barcode Scanner Interface</h2>
-        <div id="scanner">
-            <div class="scan-indicator"></div>
-        </div>
-        <div class="scanner-controls text-center p-2">
-            <!-- [Keep existing controls] -->
-        </div>
-    </div>
-
-    <div class="loading spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
+    <div id="scanner-container" style="display: none;">
+        <video id="video" width="100%" height="300px" style="border: 2px solid #666;"></video>
+        <button class="btn btn-danger mt-2" onclick="stopScanner()">Stop Scanner</button>
     </div>
 
     <script>
-        // Configuration constants
-        const API_ENDPOINT = 'YOUR_SECURE_ENDPOINT'; // Configure via build process
-        const BARCODE_VALIDATION = {
-            item: {
-                readers: ['ean_reader', 'upc_reader'],
-                validate: code => code.length >= 12 && code.length <= 13
-            },
-            serial: {
-                readers: ['code_128_reader', 'code_39_reader'],
-                validate: code => code.length >= 6 && code.length <= 20
-            }
-        };
-
         let currentScannerType = '';
-        let scannerActive = false;
-        let torchEnabled = false;
-        let csrfToken = null;
+        let mediaStream = null;
+        let detectionInterval = null;
 
-        // Initialize security features
-        document.addEventListener('DOMContentLoaded', getCsrfToken);
-
-        async function getCsrfToken() {
-            try {
-                const response = await fetch('/csrf-token');
-                const data = await response.json();
-                csrfToken = data.token;
-            } catch (error) {
-                console.error('CSRF token fetch failed:', error);
-            }
-        }
+        // Check for Barcode Detection API support
+        const isBarcodeDetectorSupported = ('BarcodeDetector' in window);
 
         async function startScanner(type) {
-            if (scannerActive) return;
-            
-            showLoading();
             currentScannerType = type;
-            updateStatus(`Starting ${type} scanner`);
-            
+            const scannerContainer = document.getElementById('scanner-container');
+            scannerContainer.style.display = 'block';
+
             try {
-                await initializeQuagga(type);
-                setupScannerListeners();
-                scannerActive = true;
-                document.getElementById('scanner-container').style.display = 'block';
-                hideLoading();
-            } catch (error) {
-                handleScannerError(error);
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
+                
+                const video = document.getElementById('video');
+                video.srcObject = mediaStream;
+                await video.play();
+
+                if (isBarcodeDetectorSupported) {
+                    const barcodeDetector = new BarcodeDetector();
+                    detectionInterval = setInterval(async () => {
+                        try {
+                            const barcodes = await barcodeDetector.detect(video);
+                            if (barcodes.length > 0) {
+                                document.getElementById(currentScannerType).value = barcodes[0].rawValue;
+                                stopScanner();
+                            }
+                        } catch (err) {
+                            console.error('Barcode detection error:', err);
+                        }
+                    }, 500);
+                } else {
+                    alert('Barcode Detection API not supported in this browser');
+                }
+            } catch (err) {
+                console.error('Camera access error:', err);
+                alert('Camera access denied or not available');
             }
         }
 
-        async function initializeQuagga(type) {
-            return new Promise((resolve, reject) => {
-                Quagga.init({
-                    ...scannerConfig,
-                    decoder: { 
-                        readers: BARCODE_VALIDATION[type].readers,
-                        debug: false // Disable debug for production
-                    }
-                }, err => {
-                    if (err) reject(err);
-                    else {
-                        Quagga.start();
-                        resolve();
-                    }
-                });
+        function stopScanner() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (detectionInterval) clearInterval(detectionInterval);
+            document.getElementById('scanner-container').style.display = 'none';
+        }
+
+        // Rest of the functions remain the same as original
+        function toggleManualEntry() {
+            document.querySelectorAll('input').forEach(input => {
+                input.disabled = !input.disabled;
             });
         }
 
-        function setupScannerListeners() {
-            Quagga.onDetected(handleDetection);
-        }
-
-        function handleDetection(result) {
-            if (!scannerActive) return;
-            
-            const code = result.codeResult.code;
-            const format = result.codeResult.format;
-            
-            if (isValidBarcode(code, format)) {
-                handleValidBarcode(code);
-            }
-        }
-
-        function isValidBarcode(code, format) {
-            const config = BARCODE_VALIDATION[currentScannerType];
-            return format.toLowerCase().includes(currentScannerType) && 
-                   config.validate(code);
-        }
-
-        function handleValidBarcode(code) {
-            const sanitized = sanitizeInput(code);
-            document.getElementById(currentScannerType).value = sanitized;
-            provideHapticFeedback();
-            showScanSuccess();
-            updateStatus(`Successfully scanned ${currentScannerType} barcode`);
-            stopScanner();
-        }
-
-        function sanitizeInput(input) {
-            return input.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
-        }
-
-        async function toggleTorch() {
-            try {
-                const track = Quagga.CameraAccess.getActiveTrack();
-                if (track && track.getCapabilities().torch) {
-                    await track.applyConstraints({
-                        advanced: [{ torch: !torchEnabled }]
-                    });
-                    torchEnabled = !torchEnabled;
-                    updateStatus(`Flashlight ${torchEnabled ? 'enabled' : 'disabled'}`);
-                }
-            } catch (error) {
-                console.error('Torch operation failed:', error);
-            }
-        }
-
-        function showScanSuccess() {
-            const indicator = document.querySelector('.scan-indicator');
-            indicator.style.backgroundColor = '#00ff00';
-            setTimeout(() => {
-                indicator.style.backgroundColor = 'rgba(0,255,0,0.5)';
-            }, 200);
-        }
-
-        function updateStatus(message) {
-            const statusRegion = document.getElementById('status-region');
-            statusRegion.textContent = message;
-        }
-
-        // [Enhanced saveToGoogleSheets function]
         async function saveToGoogleSheets() {
-            const item = sanitizeInput(document.getElementById('item').value.trim());
-            const serial = sanitizeInput(document.getElementById('serial').value.trim());
+            const item = document.getElementById('item').value;
+            const serial = document.getElementById('serial').value;
             
             if (!item || !serial) {
-                alert('Please fill both fields');
+                alert('Please fill in both barcode fields.');
                 return;
             }
 
-            showLoading();
+            const scriptURL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
             
             try {
-                const response = await fetch(API_ENDPOINT, {
+                await fetch(scriptURL, {
                     method: 'POST',
-                    headers: {
-                        'X-CSRF-Token': csrfToken,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        item,
-                        serial,
-                        timestamp: new Date().toISOString()
-                    })
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item, serial, timestamp: new Date().toISOString() })
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                clearFields();
-                updateStatus('Data saved successfully');
-                alert('Data saved successfully!');
+                alert('Data saved!');
+                document.getElementById('item').value = '';
+                document.getElementById('serial').value = '';
             } catch (error) {
-                console.error('Save failed:', error);
-                updateStatus('Error saving data');
-                alert(`Error saving data: ${error.message}`);
-            } finally {
-                hideLoading();
+                console.error('Error:', error);
+                alert('Save failed. Check console.');
             }
         }
-
-        // [Keep other functions with improved error handling]
     </script>
 </body>
 </html>
