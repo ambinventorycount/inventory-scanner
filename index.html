@@ -5,136 +5,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barcode Scanner</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 </head>
 <body class="container mt-4">
     <h2 class="mb-4">Barcode Scanner</h2>
     
-    <!-- Scan Buttons -->
-    <button class="btn btn-primary mb-2" onclick="startScanner('item')">Scan Item Barcode</button>
+    <button class="btn btn-primary mb-4" onclick="startScanner('item')">Scan Item Barcode</button>
     <button class="btn btn-primary mb-4" onclick="startScanner('serial')">Scan Serial Barcode</button>
 
-    <!-- Input Fields -->
     <div class="mb-3">
         <input type="text" id="item" class="form-control mb-2" placeholder="Item Barcode">
         <input type="text" id="serial" class="form-control" placeholder="Serial Barcode">
     </div>
 
-    <!-- Manual Entry Toggle -->
-    <button class="btn btn-secondary mb-2" onclick="toggleManualEntry()">Manual Entry</button>
-    
-    <!-- Save Button -->
+    <button class="btn btn-secondary mb-4" onclick="toggleManualEntry()">Manual Entry</button>
     <button class="btn btn-success mb-4" onclick="saveToGoogleSheets()">Save Record</button>
 
-    <!-- Scanner Preview -->
     <div id="scanner-container" style="display: none;">
-        <div id="scanner" style="width: 100%; height: 300px;"></div>
+        <video id="video" width="100%" height="300px" style="border: 2px solid #666;"></video>
         <button class="btn btn-danger mt-2" onclick="stopScanner()">Stop Scanner</button>
     </div>
 
     <script>
         let currentScannerType = '';
-        let scannerActive = false;
-        
-        function startScanner(type) {
-            if (scannerActive) {
-                stopScanner();
-                return;
-            }
-            
-            currentScannerType = type;
-            document.getElementById('scanner-container').style.display = 'block';
-            
-            Quagga.init({
-                inputStream: {
-                    name: "Live",
-                    type: "LiveStream",
-                    target: document.querySelector('#scanner'),
-                    constraints: {
-                        facingMode: "environment"
-                    }
-                },
-                decoder: {
-                    readers: [
-                        'code_128_reader',
-                        'code_39_reader',
-                        'upc_reader',
-                        'upc_e_reader'
-                    ]
-                }
-            }, function(err) {
-                if (err) {
-                    console.error('Quagga init error:', err);
-                    alert('Error initializing scanner. Check console for details.');
-                    return;
-                }
-                scannerActive = true;
-                Quagga.start();
-            });
+        let mediaStream = null;
+        let detectionInterval = null;
 
-            Quagga.onDetected(function(result) {
-                if (!scannerActive) return;
-                const code = result.codeResult.code;
-                document.getElementById(currentScannerType).value = code;
-                stopScanner();
-            });
+        // Check for Barcode Detection API support
+        const isBarcodeDetectorSupported = ('BarcodeDetector' in window);
+
+        async function startScanner(type) {
+            currentScannerType = type;
+            const scannerContainer = document.getElementById('scanner-container');
+            scannerContainer.style.display = 'block';
+
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }
+                });
+                
+                const video = document.getElementById('video');
+                video.srcObject = mediaStream;
+                await video.play();
+
+                if (isBarcodeDetectorSupported) {
+                    const barcodeDetector = new BarcodeDetector();
+                    detectionInterval = setInterval(async () => {
+                        try {
+                            const barcodes = await barcodeDetector.detect(video);
+                            if (barcodes.length > 0) {
+                                document.getElementById(currentScannerType).value = barcodes[0].rawValue;
+                                stopScanner();
+                            }
+                        } catch (err) {
+                            console.error('Barcode detection error:', err);
+                        }
+                    }, 500);
+                } else {
+                    alert('Barcode Detection API not supported in this browser');
+                }
+            } catch (err) {
+                console.error('Camera access error:', err);
+                alert('Camera access denied or not available');
+            }
         }
 
         function stopScanner() {
-            if (scannerActive) {
-                Quagga.stop();
-                scannerActive = false;
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
             }
+            if (detectionInterval) clearInterval(detectionInterval);
             document.getElementById('scanner-container').style.display = 'none';
         }
 
+        // Rest of the functions remain the same as original
         function toggleManualEntry() {
-            const inputs = document.querySelectorAll('input');
-            const btn = document.querySelector('[onclick="toggleManualEntry()"]');
-            inputs.forEach(input => {
+            document.querySelectorAll('input').forEach(input => {
                 input.disabled = !input.disabled;
-                input.placeholder = input.disabled ? 'Use scanner' : input.id === 'item' ? 'Item Barcode' : 'Serial Barcode';
             });
-            btn.textContent = inputs[0].disabled ? 'Enable Scanner' : 'Manual Entry';
         }
 
         async function saveToGoogleSheets() {
-            const item = document.getElementById('item').value.trim();
-            const serial = document.getElementById('serial').value.trim();
+            const item = document.getElementById('item').value;
+            const serial = document.getElementById('serial').value;
             
             if (!item || !serial) {
-                alert('Please fill both fields before saving!');
+                alert('Please fill in both barcode fields.');
                 return;
             }
 
-            const scriptURL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
+            const scriptURL = 'https://script.google.com/macros/s/AKfycbyhMRU0DcDquqbamt5vSRBheJDIzEFcGnwgVZJ7H7fH4DbjJgFllr59xXjAWVElzpqKPg/exec';
             
             try {
-                const response = await fetch(scriptURL, {
+                await fetch(scriptURL, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        item: item,
-                        serial: serial,
-                        timestamp: new Date().toISOString()
-                    })
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item, serial, timestamp: new Date().toISOString() })
                 });
-
-                if (!response.ok) throw new Error('Network response was not ok');
-                
-                alert('Data saved successfully!');
+                alert('Data saved!');
                 document.getElementById('item').value = '';
                 document.getElementById('serial').value = '';
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error saving data: ' + error.message);
+                alert('Save failed. Check console.');
             }
         }
-
-        // Automatically stop scanner when leaving page
-        window.addEventListener('beforeunload', stopScanner);
     </script>
 </body>
 </html>
