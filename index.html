@@ -9,7 +9,7 @@
     <style>
         #scanner-container {
             position: fixed;
-            top: 0;
+            top: 100;
             left: 0;
             width: 100%;
             height: 100%;
@@ -95,6 +95,7 @@
 
             Quagga.onDetected(function(result) {
                 const code = result.codeResult.code;
+  const format = result.codeResult.format;
                 document.getElementById(currentScannerType).value = code;
                 stopScanner();
             });
