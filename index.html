@@ -25,23 +25,33 @@
 
     <!-- Control Buttons -->
     <button onclick="startScanner()">Start Scanning</button>
+    <button onclick="stopScanner()">Stop Scanner</button>
     <button onclick="saveToGoogleSheets()">Save Record</button>
 
     <script>
+        let scanner;
         let scanningItem = true; // Track which barcode is being scanned
 
         function startScanner() {
-            const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+            scanner = new Html5Qrcode("reader");
+            scanner.start(
+                { facingMode: "environment" }, // Use rear camera
+                { fps: 15, qrbox: 350 },
+                (decodedText) => {
+                    if (scanningItem) {
+                        document.getElementById("itemBarcode").value = decodedText;
+                        scanningItem = false;
+                    } else {
+                        document.getElementById("serialBarcode").value = decodedText;
+                        stopScanner();
+                    }
+                },
+                (errorMessage) => { console.warn(errorMessage); }
+            );
+        }
 
-            scanner.render((decodedText) => {
-                if (scanningItem) {
-                    document.getElementById("itemBarcode").value = decodedText;
-                    scanningItem = false;
-                } else {
-                    document.getElementById("serialBarcode").value = decodedText;
-                    scanner.clear();
-                }
-            });
+        function stopScanner() {
+            if (scanner) scanner.stop();
         }
 
         async function saveToGoogleSheets() {
@@ -53,7 +63,7 @@
                 return;
             }
 
-            const scriptURL = "YOUR_GOOGLE_SCRIPT_URL_HERE";
+            const scriptURL = "https://script.google.com/macros/s/AKfycbyhMRU0DcDquqbamt5vSRBheJDIzEFcGnwgVZJ7H7fH4DbjJgFllr59xXjAWVElzpqKPg/exec";
             const data = { item: itemBarcode, serial: serialBarcode };
 
             try {
