@@ -43,7 +43,7 @@
         let manualEntryEnabled = false;
 
         const scanAppConfig = {
-            apiKey: 'YOUR_SCANAPP_API_KEY', // Replace with your ScanApp API Key
+            apiKey: 'KF_API_815b9287-ebb8-4780-90d0-fc76ad4dd241', // Replace with your ScanApp API Key
             videoElement: document.getElementById('scanner-video'),
             formats: ['code128', 'code39', 'upc_a', 'ean_13', 'qr_code'],
             engine: 'dynamic',
@@ -107,7 +107,7 @@
                 return;
             }
 
-            const scriptURL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
+            const scriptURL = 'https://script.google.com/macros/s/AKfycbyhMRU0DcDquqbamt5vSRBheJDIzEFcGnwgVZJ7H7fH4DbjJgFllr59xXjAWVElzpqKPg/exec';
 
             try {
                 await fetch(scriptURL, {
