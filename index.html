@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barcode Scanner</title>
+    <title>Mobile Barcode Scanner</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- ScanApp SDK -->
     <script src="https://cdn.scanapp.org/v3/scanapp.min.js"></script>
 </head>
 <body class="container mt-4">
     <h2 class="mb-4">Barcode Scanner</h2>
-    
+
     <!-- Scan Buttons -->
     <div class="btn-group mb-3">
         <button class="btn btn-primary" onclick="startScanner('item')">Scan Item Barcode</button>
@@ -19,17 +18,14 @@
 
     <!-- Input Fields -->
     <div class="mb-3">
-        <input type="text" id="item" class="form-control mb-2" placeholder="Item Barcode" required disabled>
-        <input type="text" id="serial" class="form-control" placeholder="Serial Barcode" required disabled>
+        <input type="text" id="item" class="form-control mb-2" placeholder="Item Barcode" required>
+        <input type="text" id="serial" class="form-control" placeholder="Serial Barcode" required>
     </div>
 
     <!-- Controls -->
     <div class="btn-group mb-4">
         <button id="manualToggle" class="btn btn-secondary" onclick="toggleManualEntry()">Enable Manual Entry</button>
-        <button class="btn btn-success" onclick="saveToGoogleSheets()" id="saveButton">
-            <span class="spinner-border spinner-border-sm d-none" role="status"></span>
-            Save Record
-        </button>
+        <button class="btn btn-success" onclick="saveToGoogleSheets()">Save Record</button>
     </div>
 
     <!-- Scanner Preview -->
@@ -47,9 +43,9 @@
         let manualEntryEnabled = false;
 
         const scanAppConfig = {
-            apiKey: 'YOUR_SCANAPP_API_KEY',
+            apiKey: 'YOUR_SCANAPP_API_KEY', // Replace with your ScanApp API Key
             videoElement: document.getElementById('scanner-video'),
-            formats: ['code128', 'code39', 'upc_a'],
+            formats: ['code128', 'code39', 'upc_a', 'ean_13', 'qr_code'],
             engine: 'dynamic',
             beepSound: 'https://cdn.scanapp.org/v3/beep.mp3'
         };
@@ -57,52 +53,32 @@
         function showAlert(message, type = 'success') {
             const alert = document.getElementById('alert');
             alert.className = `alert alert-${type}`;
-            alert.innerHTML = message;
+            alert.textContent = message;
             alert.classList.remove('d-none');
-            setTimeout(() => alert.classList.add('d-none'), 5000);
+            setTimeout(() => alert.classList.add('d-none'), 3000);
         }
 
         async function startScanner(type) {
             if (scanner?.isScanning) return;
             currentScannerType = type;
-            
             try {
                 document.getElementById('scanner-container').classList.remove('d-none');
-                
                 if (!scanner) {
                     scanner = new ScanApp.Scanner(scanAppConfig);
-                    
                     scanner.on('scan', (result) => {
-                        if (validateBarcode(result.code, type)) {
-                            document.getElementById(currentScannerType).value = result.code;
-                            stopScanner();
-                        }
+                        document.getElementById(currentScannerType).value = result.code;
+                        stopScanner();
                     });
-                    
                     scanner.on('error', (error) => {
                         showAlert(`Scanner error: ${error.message}`, 'danger');
                         stopScanner();
                     });
                 }
-                
                 await scanner.start();
             } catch (err) {
                 showAlert(`Scanner initialization failed: ${err.message}`, 'danger');
                 stopScanner();
             }
-        }
-
-        function validateBarcode(code, type) {
-            const patterns = {
-                item: /^[A-Z0-9]{8}$/,
-                serial: /^[A-Z0-9]{12}$/
-            };
-            
-            if (!patterns[type].test(code)) {
-                showAlert(`Invalid ${type} barcode format`, 'warning');
-                return false;
-            }
-            return true;
         }
 
         async function stopScanner() {
@@ -116,14 +92,8 @@
             manualEntryEnabled = !manualEntryEnabled;
             const inputs = document.querySelectorAll('input');
             const toggleBtn = document.getElementById('manualToggle');
-            
-            inputs.forEach(input => {
-                input.disabled = !manualEntryEnabled;
-                if (!manualEntryEnabled) input.value = '';
-            });
-            
-            toggleBtn.textContent = manualEntryEnabled ? 
-                'Disable Manual Entry' : 'Enable Manual Entry';
+            inputs.forEach(input => input.disabled = !manualEntryEnabled);
+            toggleBtn.textContent = manualEntryEnabled ? 'Disable Manual Entry' : 'Enable Manual Entry';
             toggleBtn.classList.toggle('btn-secondary');
             toggleBtn.classList.toggle('btn-warning');
         }
@@ -131,8 +101,6 @@
         async function saveToGoogleSheets() {
             const item = document.getElementById('item').value;
             const serial = document.getElementById('serial').value;
-            const saveButton = document.getElementById('saveButton');
-            const spinner = saveButton.querySelector('.spinner-border');
 
             if (!item || !serial) {
                 showAlert('Please fill both fields!', 'warning');
@@ -140,15 +108,12 @@
             }
 
             const scriptURL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
-            
-            try {
-                saveButton.disabled = true;
-                spinner.classList.remove('d-none');
 
-                const response = await fetch(scriptURL, {
+            try {
+                await fetch(scriptURL, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         item: item,
@@ -157,35 +122,14 @@
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
                 showAlert('Data saved successfully!');
                 document.getElementById('item').value = '';
                 document.getElementById('serial').value = '';
             } catch (error) {
-                showAlert(`Error saving data: ${error.message}`, 'danger');
-                console.error('Error:', error);
-            } finally {
-                saveButton.disabled = false;
-                spinner.classList.add('d-none');
+                showAlert('Error saving data. Please try again.', 'danger');
             }
         }
 
-        // Security: Basic credential check
-        window.addEventListener('load', () => {
-            if (scanAppConfig.apiKey === 'YOUR_SCANAPP_API_KEY' ||
-                scriptURL === 'https://script.google.com/macros/s/AKfycbyhMRU0DcDquqbamt5vSRBheJDIzEFcGnwgVZJ7H7fH4DbjJgFllr59xXjAWVElzpqKPg/exec') {
-                showAlert('Configuration missing! Please set API key and Google Script URL', 'danger');
-            }
-        });
-
-        window.addEventListener('beforeunload', () => {
-            if (scanner?.isScanning) {
-                scanner.stop();
-            }
-        });
     </script>
 </body>
 </html>
