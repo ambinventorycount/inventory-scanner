@@ -32,7 +32,7 @@
   </style>
 </head>
 <body>
-  <h2>Scan Item & Serial Barcodes 22</h2>
+  <h2>Scan Item & Serial Barcodes 5.2 -1 </h2>
   <div class="controls">
     <br>
     <label for="zoomRange">Adjust Zoom:</label>
@@ -58,14 +58,24 @@
     function startScanner() {
       // Create a new instance of the scanner using the reader div
       scanner = new Html5Qrcode("reader");
-      scanner.start(
-        { facingMode: "environment" }, // Use rear camera
-        {
-          fps: 8,
-          qrbox: 300 ,
-	 focusMode: "continuous"
+     
+ const camera = { facingMode: 'environment' }
+          const qrBoxSize = 250
+          const width = window.innerWidth
+          const height = window.innerHeight
+          const aspectRatio = width / height
+          const config = {
+            fps: 20, // frame per seconds for qr code scanning
+            aspectRatio,
+            qrbox: { width: qrBoxSize, height: qrBoxSize },
+          }
 
-        },
+
+
+ scanner.start(
+        camera, // Use rear camera
+config,        
+
         (decodedText) => {
           // When a barcode is decoded, populate the appropriate input field.
           if (scanningItem) {
