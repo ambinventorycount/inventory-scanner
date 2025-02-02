@@ -60,6 +60,9 @@
     <br />
     <label for="focus">Focus (if supported):</label>
     <input type="range" id="focus" min="0" max="100" step="1" value="50" />
+    <br />
+    <label for="zoom">Zoom (if supported):</label>
+    <input type="range" id="zoom" min="1" max="3" step="0.1" value="1" />
   </div>
 
   <!-- Manual Input Form -->
@@ -97,8 +100,7 @@
           target: document.querySelector("#interactive"),
           constraints: {
             facingMode: "environment"
-            // You can add advanced constraints here if supported
-            // For example: advanced: [{ focusMode: "continuous" }]
+            // You can add advanced constraints here if supported.
           }
         },
         decoder: {
@@ -126,7 +128,7 @@
         console.log("Quagga initialization finished. Ready to start");
         Quagga.start();
 
-        // Try to get the active video track for advanced controls
+        // Try to get the active video track for advanced controls.
         const track = Quagga.CameraAccess.getActiveTrack();
         if (track) {
           activeStreamTrack = track;
@@ -189,6 +191,21 @@
             .catch(err => console.error("Focus adjustment error:", err));
         } else {
           console.warn("Focus adjustment not supported by this camera.");
+        }
+      }
+    });
+
+    // Attempt to adjust zoom using media track constraints (may not be supported on many devices).
+    document.getElementById("zoom").addEventListener("input", function () {
+      const zoomValue = parseFloat(this.value);
+      if (activeStreamTrack) {
+        const capabilities = activeStreamTrack.getCapabilities();
+        if (capabilities.zoom) {
+          activeStreamTrack.applyConstraints({ advanced: [{ zoom: zoomValue }] })
+            .then(() => console.log("Zoom adjusted:", zoomValue))
+            .catch(err => console.error("Zoom adjustment error:", err));
+        } else {
+          console.warn("Zoom adjustment not supported by this camera.");
         }
       }
     });
