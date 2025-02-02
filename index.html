@@ -64,11 +64,16 @@
           const width = window.innerWidth
           const height = window.innerHeight
           const aspectRatio = width / height
-          const config = {
-            fps: 20, // frame per seconds for qr code scanning
-            aspectRatio,
-            qrbox: { width: qrBoxSize, height: qrBoxSize },
-          }
+const config = {
+            fps: 20,
+            qrbox: { width: 250, height: 250 },
+            videoConstraints: {
+              facingMode: 'environment',
+              aspectRatio: this.isMobileWidth
+                ? aspectRatio + 1
+                : aspectRatio,
+            },
+}
 
 
 
