@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode Scanner</title>
+  <!-- Include html5-qrcode library -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #reader {
+      width: 300px;
+      margin: auto;
+    }
+    input {
+      width: 90%;
+      padding: 8px;
+      margin: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      margin: 10px;
+      cursor: pointer;
+    }
+    .controls {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Scan Item & Serial Barcodes</h2>
+  
+  <!-- Barcode Scanner -->
+  <div id="reader"></div>
+  
+  <!-- Input Fields -->
+  <input type="text" id="itemBarcode" placeholder="Item Barcode">
+  <input type="text" id="serialBarcode" placeholder="Serial Barcode">
+  
+  <!-- Control Buttons -->
+  <button onclick="startScanner()">Start Scanning</button>
+  <button onclick="stopScanner()">Stop Scanner</button>
+  <button onclick="saveToGoogleSheets()">Save Record</button>
+  
+  <div class="controls">
+    <button id="toggleTorch">Toggle Torch</button>
+    <br>
+    <label for="zoomRange">Adjust Zoom:</label>
+    <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="1">
+  </div>
+  
+  <script>
+    let scanner;
+    let scanningItem = true; // Track which barcode is being scanned (first: item, then serial)
+
+    // Start the barcode scanner
+    function startScanner() {
+      // Create a new instance of the scanner using the reader div
+      scanner = new Html5Qrcode("reader");
+      scanner.start(
+        { facingMode: "environment" }, // Use rear camera
+        { 
+          fps: 10, 
+          qrbox: { width: 300, height: 250 },
+          showTorchButtonIfSupported: true,
+          showZoomSliderIfSupported: true
+        },
+        (decodedText) => {
+          // When a barcode is decoded, populate the appropriate input field.
+          if (scanningItem) {
+            document.getElementById("itemBarcode").value = decodedText;
+            scanningItem = false;
+          } else {
+            document.getElementById("serialBarcode").value = decodedText;
+            // Stop scanning after the serial barcode is captured.
+            stopScanner();
+            // Reset for the next scan session if desired:
+            scanningItem = true;
+          }
+        },
+        (errorMessage) => {
+          console.warn("Scan error:", errorMessage);
+        }
+      ).then(() => {
+        console.log("Scanner started successfully.");
+      }).catch((err) => {
+        console.error("Unable to start scanning.", err);
+      });
+    }
+
+    // Stop the scanner
+    function stopScanner() {
+      if (scanner) {
+        scanner.stop().then(() => {
+          console.log("Scanner stopped.");
+        }).catch((err) => {
+          console.error("Error stopping scanner:", err);
+        });
+      }
+    }
+
+    // Torch (flash) toggle functionality
+    document.getElementById("toggleTorch").addEventListener("click", () => {
+      const track = getVideoTrack();
+      if (track) {
+        const capabilities = track.getCapabilities();
+        if (capabilities.torch) {
+          const settings = track.getSettings();
+          const currentTorch = settings.torch || false;
+          track.applyConstraints({ advanced: [{ torch: !currentTorch }] })
+            .then(() => console.log("Torch toggled"))
+            .catch(err => console.error("Torch toggle error:", err));
+        } else {
+          alert("Torch not supported on this device.");
+        }
+      } else {
+        alert("Video track not available.");
+      }
+    });
+
+    // Zoom adjustment control
+    document.getElementById("zoomRange").addEventListener("input", (e) => {
+      const track = getVideoTrack();
+      if (track) {
+        const capabilities = track.getCapabilities();
+        if (capabilities.zoom) {
+          track.applyConstraints({ advanced: [{ zoom: parseFloat(e.target.value) }] })
+            .then(() => console.log("Zoom adjusted"))
+            .catch(err => console.error("Zoom adjustment error:", err));
+        } else {
+          console.log("Zoom adjustment not supported.");
+        }
+      }
+    });
+
+    // Helper function to retrieve the video track from the scanner's video element
+    function getVideoTrack() {
+      const videoElem = document.querySelector("#reader video");
+      if (videoElem && videoElem.srcObject) {
+        const tracks = videoElem.srcObject.getVideoTracks();
+        if (tracks && tracks.length > 0) {
+          return tracks[0];
+        }
+      }
+      return null;
+    }
+
+    // Save the scanned/entered data to Google Sheets using a Google Apps Script endpoint
+    async function saveToGoogleSheets() {
+      const itemBarcode = document.getElementById("itemBarcode").value;
+      const serialBarcode = document.getElementById("serialBarcode").value;
+      if (!itemBarcode || !serialBarcode) {
+        alert("Please scan or enter both barcodes!");
+        return;
+      }
+      const scriptURL = "https://script.google.com/macros/s/AKfycbwXB6XxWn0GVMSEXr6PlTrwXFMGG29RCwBm0sjAkTa4/dev";
+      const data = { item: itemBarcode, serial: serialBarcode };
+      try {
+        const response = await fetch(scriptURL, {
+          method: "POST",
+          body: JSON.stringify(data),
+          headers: { "Content-Type": "application/json" }
+        });
+        if (response.ok) {
+          alert("Data saved successfully!");
+        } else {
+          alert("Error saving data!");
+        }
+      } catch (error) {
+        console.error("Error saving data:", error);
+        alert("Error saving data!");
+      }
+    }
+  </script>
+</body>
+</html>
