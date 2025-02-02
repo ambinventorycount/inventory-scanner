@@ -33,6 +33,12 @@
 </head>
 <body>
   <h2>Scan Item & Serial Barcodes</h2>
+  <div class="controls">
+    <br>
+    <label for="zoomRange">Adjust Zoom:</label>
+    <input type="range" id="zoomRange" min="1" max="20" step="0.1" value="5">
+  </div>
+
   <!-- Barcode Scanner -->
   <div id="reader"></div>
   <!-- Input Fields -->
@@ -42,11 +48,7 @@
   <button onclick="startScanner()">Start Scanning</button>
   <button onclick="stopScanner()">Stop Scanner</button>
   <button onclick="saveToGoogleSheets()">Save Record</button>
-  <div class="controls">
-    <br>
-    <label for="zoomRange">Adjust Zoom:</label>
-    <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="5">
-  </div>
+
   <script>
     let scanner;
     let scanningItem = true; // Track which barcode is being scanned (first: item, then serial)
