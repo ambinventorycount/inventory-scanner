@@ -44,10 +44,21 @@
       font-size: 1em;
       margin-top: 10px;
     }
+    /* Display area for device info and record counter */
+    #info-area {
+      text-align: center;
+      margin: 10px 0;
+    }
   </style>
 </head>
 <body>
   <h1>Mobile Barcode Scanner using html5-qrcode</h1>
+  
+  <!-- Display Device Info and Record Counter -->
+  <div id="info-area">
+    <div id="device-info">Device: Detecting...</div>
+    <div id="record-counter">Records submitted: 0</div>
+  </div>
 
   <!-- Scanner View (50% smaller) -->
   <div id="reader"></div>
@@ -87,9 +98,40 @@
     let lastScannedItem = "";
     let lastScannedSerial = "";
     let activeStreamTrack = null;
+    let recordCounter = 0;    // Counter for successfully submitted records
 
     const startButton = document.getElementById("start-scan");
     const stopButton = document.getElementById("stop-scan");
+    const deviceInfoElem = document.getElementById("device-info");
+    const recordCounterElem = document.getElementById("record-counter");
+
+    // Attempt to parse device information from the user agent.
+    // Note: This is heuristic and may not produce accurate results on all devices.
+    function getDeviceInfo() {
+      const ua = navigator.userAgent;
+      let deviceInfo = "Unknown Device";
+      
+      if (/android/i.test(ua)) {
+        const versionMatch = ua.match(/Android\s([0-9\.]+)/i);
+        const modelMatch = ua.match(/;\s([^;]*\sBuild)/i);
+        const version = versionMatch ? versionMatch[1] : "";
+        let model = "";
+        if (modelMatch) {
+          model = modelMatch[1].replace(" Build", "").trim();
+        }
+        deviceInfo = "Android " + version + (model ? " " + model : "");
+      } else if (/iPhone|iPad|iPod/i.test(ua)) {
+        const versionMatch = ua.match(/OS\s([\d_]+)/i);
+        const version = versionMatch ? versionMatch[1].replace(/_/g, ".") : "";
+        deviceInfo = "iOS " + version + " (iPhone/iPad)";
+      } else {
+        deviceInfo = navigator.platform;
+      }
+      return deviceInfo;
+    }
+
+    // Set the device info on page load.
+    deviceInfoElem.textContent = "Device: " + getDeviceInfo();
 
     // Start the scanner using html5-qrcode
     startButton.addEventListener("click", () => {
@@ -98,49 +140,74 @@
       startButton.disabled = true;
       stopButton.disabled = false;
 
-      // Create a new instance of the scanner, using the "reader" div
       html5QrCode = new Html5Qrcode("reader");
-      // Configuration for the scanner
-      const config = { fps: 10, qrbox: 250 }; // Adjust fps and scanning box size as needed.
+      
+      // Updated configuration:
+      // - Increased qrbox size for better detection of larger barcode regions.
+      // - Added formatsToSupport option with common barcode formats (experimental).
+      const config = { 
+        fps: 10, 
+        qrbox: 300,
+        // The following option is experimental and may be subject to change in future releases.
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.ITF
+        ]
+      };
 
-      // Start scanning using the environment (back) camera
-      html5QrCode.start(
-        { facingMode: "environment" },
-        config,
-        (decodedText, decodedResult) => {
-          // Process decoded text.
-          // For this example, we assume the first detected code is the "Item" barcode
-          // and the second (if different) is the "Serial" barcode.
-          if (!lastScannedItem) {
-            lastScannedItem = decodedText;
-            alert("Item Barcode detected: " + decodedText);
-          } else if (!lastScannedSerial && decodedText !== lastScannedItem) {
-            lastScannedSerial = decodedText;
-            alert("Serial Barcode detected: " + decodedText);
-            // Once both are detected, record the data.
-            recordData(lastScannedItem, lastScannedSerial);
-            // Reset the stored values for the next scan.
-            lastScannedItem = "";
-            lastScannedSerial = "";
-          }
-        },
-        (errorMessage) => {
-          // Optional error callback.
-          console.log("Scan error:", errorMessage);
+      // Retrieve available cameras and use the default (first) one.
+      Html5Qrcode.getCameras().then(cameras => {
+        if (cameras && cameras.length) {
+          const defaultCamera = cameras[0];
+          console.log("Starting scanner on camera:", defaultCamera);
+          html5QrCode.start(
+            defaultCamera.id,
+            config,
+            (decodedText, decodedResult) => {
+              console.log("Decoded text:", decodedText);
+              // Process decoded text.
+              // Assume the first detected code is the "Item" barcode
+              // and the second (if different) is the "Serial" barcode.
+              if (!lastScannedItem) {
+                lastScannedItem = decodedText;
+                alert("Item Barcode detected: " + decodedText);
+              } else if (!lastScannedSerial && decodedText !== lastScannedItem) {
+                lastScannedSerial = decodedText;
+                alert("Serial Barcode detected: " + decodedText);
+                // Once both are detected, record the data.
+                recordData(lastScannedItem, lastScannedSerial);
+                // Reset stored values for the next scan.
+                lastScannedItem = "";
+                lastScannedSerial = "";
+              }
+            },
+            (errorMessage) => {
+              // Optional error callback.
+              console.warn("Scan error:", errorMessage);
+            }
+          ).then(() => {
+            console.log("Scanning started successfully.");
+            // Retrieve the underlying video track for adjustments.
+            const videoElem = document.querySelector("#reader video");
+            if (videoElem && videoElem.srcObject) {
+              const tracks = videoElem.srcObject.getVideoTracks();
+              if (tracks && tracks.length > 0) {
+                activeStreamTrack = tracks[0];
+              }
+            }
+          }).catch((err) => {
+            console.error("Unable to start scanning.", err);
+          });
+        } else {
+          console.error("No cameras found.");
         }
-      )
-      .then(() => {
-        // Once scanning has started, attempt to retrieve the underlying video track.
-        const videoElem = document.querySelector("#reader video");
-        if (videoElem && videoElem.srcObject) {
-          const tracks = videoElem.srcObject.getVideoTracks();
-          if (tracks && tracks.length > 0) {
-            activeStreamTrack = tracks[0];
-          }
-        }
-      })
-      .catch((err) => {
-        console.error("Unable to start scanning.", err);
+      }).catch(err => {
+        console.error("Error retrieving cameras.", err);
       });
     });
 
@@ -225,6 +292,9 @@
       .then(responseJson => {
         alert("Data recorded successfully!");
         console.log("Response from server:", responseJson);
+        // Increment and update the record submission counter.
+        recordCounter++;
+        recordCounterElem.textContent = "Records submitted: " + recordCounter;
       })
       .catch(error => {
         console.error("Error recording data:", error);
