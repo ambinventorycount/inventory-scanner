@@ -60,9 +60,11 @@
       scanner = new Html5Qrcode("reader");
       scanner.start(
         { facingMode: "environment" }, // Use rear camera
+          width: { min: 400, ideal: 720 },
+          height: { min: 400, ideal: 720 },
         {
           fps: 10,
-          qrbox: { width: 300, height: 130 },
+         // qrbox: { width: 300, height: 130 },
 	   showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true,
 	  useBarCodeDetectorIfSupported: true,
