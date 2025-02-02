@@ -1,186 +1,97 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Barcode Scanner</title>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <style>
-        /* ... (keep previous styles) ... */
-        .camera-controls {
-            margin: 15px 0;
-            display: none;
-        }
-        .camera-controls label {
-            display: block;
-            margin: 10px 0;
-        }
-        #zoomSlider { width: 200px; }
-        #torchBtn { background-color: #ffc107; color: black; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode Scanner with Camera Controls</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+    #reader { width: 100%; max-width: 400px; margin: auto; }
+    input, button { display: block; width: 90%; margin: 10px auto; padding: 10px; }
+    .controls { margin-top: 10px; }
+  </style>
 </head>
 <body>
+  <h2>Scan or Enter Barcodes</h2>
+  <div id="reader"></div>
+  
+  <label>Item Barcode:</label>
+  <input type="text" id="itemBarcode" placeholder="Scan or enter item barcode">
+  
+  <label>Serial Barcode:</label>
+  <input type="text" id="serialBarcode" placeholder="Scan or enter serial barcode">
+  
+  <div class="controls">
+    <button id="toggleTorch">Toggle Torch</button>
+    <label for="focusRange">Adjust Focus:</label>
+    <input type="range" id="focusRange" min="0" max="10" step="0.1" value="0">
+  </div>
 
-    <h1>Advanced Barcode Scanner</h1>
-    
-    <div class="input-group">
-        <input type="text" id="itemBarcode" placeholder="Scan item barcode..." autocomplete="off">
-        <input type="text" id="serialBarcode" placeholder="Scan serial barcode..." autocomplete="off">
-    </div>
+  <script>
+    // On scan, fill the first empty barcode input
+    function onScanSuccess(decodedText, decodedResult) {
+      if (!document.getElementById("itemBarcode").value) {
+        document.getElementById("itemBarcode").value = decodedText;
+      } else {
+        document.getElementById("serialBarcode").value = decodedText;
+      }
+    }
 
-    <div class="status" id="statusMessage">Ready to scan</div>
-    
-    <div id="reader"></div>
+    const html5QrCode = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then(cameras => {
+      if (cameras && cameras.length) {
+        html5QrCode.start(
+          cameras[0].id,
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          onScanSuccess
+        );
+      }
+    }).catch(err => console.error(err));
 
-    <div class="camera-controls" id="cameraControls">
-        <label>
-            Zoom: 
-            <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
-            <span id="zoomValue">1x</span>
-        </label>
-        <button id="torchBtn" onclick="toggleTorch()">Toggle Torch</button>
-    </div>
+    // Utility function to get the active video track
+    function getVideoTrack() {
+      const video = document.querySelector("video");
+      if (video && video.srcObject) {
+        const tracks = video.srcObject.getVideoTracks();
+        return tracks.length ? tracks[0] : null;
+      }
+      return null;
+    }
 
-    <div>
-        <button id="startBtn" onclick="toggleScanning()">Start Scanning</button>
-        <button id="stopBtn" onclick="stopScanner()" disabled>Stop Scanner</button>
-        <button id="saveBtn" onclick="saveToGoogleSheets()" disabled>Save Record</button>
-    </div>
-
-    <div id="alert" class="alert"></div>
-
-    <script>
-        let scanner;
-        let isScanning = false;
-        let currentField = 'itemBarcode';
-        let videoTrack;
-        let torchEnabled = false;
-        const scriptURL = "YOUR_GOOGLE_SCRIPT_URL";
-
-        async function toggleScanning() {
-            if (isScanning) {
-                await stopScanner();
-            } else {
-                await startScanner();
-            }
+    // Torch (flash) toggle
+    document.getElementById("toggleTorch").addEventListener("click", () => {
+      const track = getVideoTrack();
+      if (track) {
+        const capabilities = track.getCapabilities();
+        if (capabilities.torch) {
+          const settings = track.getSettings();
+          const currentTorch = settings.torch || false;
+          track.applyConstraints({ advanced: [{ torch: !currentTorch }] })
+          .catch(err => console.error("Torch toggle error:", err));
+        } else {
+          alert("Torch not supported on this device.");
         }
+      }
+    });
 
-        async function startScanner() {
-            try {
-                showAlert('Initializing scanner...', 'info');
-                document.getElementById('reader').style.display = 'block';
-                
-                scanner = new Html5Qrcode("reader");
-                await scanner.start(
-                    { facingMode: "environment" },
-                    {
-                        fps: 15,
-                        qrbox: 300,
-                        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-                        formatsToSupport: [
-                            Html5QrcodeSupportedFormats.CODE_128,
-                            Html5QrcodeSupportedFormats.CODE_39,
-                            Html5QrcodeSupportedFormats.EAN_13,
-                            Html5QrcodeSupportedFormats.QR_CODE
-                        ]
-                    },
-                    handleScanResult,
-                    handleScanError
-                );
-
-                // Get video track and setup camera controls
-                videoTrack = scanner.getRunningTrack();
-                setupCameraControls();
-                
-                isScanning = true;
-                updateUIState();
-                showAlert('Scanner ready - scan the item barcode', 'info');
-                document.getElementById('reader').classList.add('scanner-active');
-            } catch (err) {
-                showAlert(`Scanner error: ${err.message}`, 'error');
-                await stopScanner();
-            }
+    // Focus adjustment
+    document.getElementById("focusRange").addEventListener("input", (e) => {
+      const track = getVideoTrack();
+      if (track) {
+        const capabilities = track.getCapabilities();
+        if (capabilities.focusDistance) {
+          track.applyConstraints({
+            advanced: [{
+              focusMode: "manual",
+              focusDistance: parseFloat(e.target.value)
+            }]
+          }).catch(err => console.error("Focus adjustment error:", err));
+        } else {
+          console.log("Focus adjustment not supported.");
         }
-
-        function setupCameraControls() {
-            const controls = document.getElementById('cameraControls');
-            const zoomSlider = document.getElementById('zoomSlider');
-            const zoomValue = document.getElementById('zoomValue');
-
-            if (!videoTrack) return;
-
-            // Zoom capabilities
-            const capabilities = videoTrack.getCapabilities();
-            const settings = videoTrack.getSettings();
-
-            if (capabilities.zoom) {
-                zoomSlider.min = capabilities.zoom.min;
-                zoomSlider.max = capabilities.zoom.max;
-                zoomSlider.step = capabilities.zoom.step || 0.1;
-                zoomSlider.value = settings.zoom || 1;
-                zoomValue.textContent = `${zoomSlider.value}x`;
-
-                zoomSlider.addEventListener('input', async (e) => {
-                    try {
-                        await videoTrack.applyConstraints({
-                            advanced: [{ zoom: parseFloat(e.target.value) }]
-                        });
-                        zoomValue.textContent = `${e.target.value}x`;
-                    } catch (err) {
-                        showAlert(`Zoom error: ${err.message}`, 'error');
-                    }
-                });
-                controls.style.display = 'block';
-            }
-
-            // Torch capabilities
-            if (capabilities.torch || capabilities.fillLightMode) {
-                document.getElementById('torchBtn').style.display = 'inline-block';
-                controls.style.display = 'block';
-            }
-        }
-
-        async function toggleTorch() {
-            try {
-                torchEnabled = !torchEnabled;
-                const capabilities = videoTrack.getCapabilities();
-                
-                if (capabilities.torch) {
-                    await videoTrack.applyConstraints({
-                        advanced: [{ torch: torchEnabled }]
-                    });
-                } else if (capabilities.fillLightMode) {
-                    await videoTrack.applyConstraints({
-                        advanced: [{ fillLightMode: torchEnabled ? 'on' : 'off' }]
-                    });
-                }
-                
-                document.getElementById('torchBtn').textContent = 
-                    torchEnabled ? 'Disable Torch' : 'Enable Torch';
-            } catch (err) {
-                showAlert(`Torch error: ${err.message}`, 'error');
-            }
-        }
-
-        async function stopScanner() {
-            try {
-                if (scanner) {
-                    await scanner.stop();
-                    document.getElementById('reader').style.display = 'none';
-                    document.getElementById('reader').classList.remove('scanner-active');
-                    document.getElementById('cameraControls').style.display = 'none';
-                }
-                isScanning = false;
-                currentField = 'itemBarcode';
-                updateUIState();
-                showAlert('Scanner stopped', 'info');
-            } catch (err) {
-                showAlert(`Error stopping scanner: ${err.message}`, 'error');
-            }
-        }
-
-        // ... (keep rest of the existing functions unchanged) ...
-    </script>
-
+      }
+    });
+  </script>
 </body>
 </html>
