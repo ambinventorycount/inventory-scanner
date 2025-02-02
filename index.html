@@ -13,7 +13,7 @@
       padding: 20px;
     }
     #reader {
-      width: 250px;
+      width: 300px;
       margin: auto;
     }
     input {
@@ -32,7 +32,7 @@
   </style>
 </head>
 <body>
-  <h2>Scan Item & Serial Barcodes 5.2 8 </h2>
+  <h2>Scan Item & Serial Barcodes 5.2 10 </h2>
   <div class="controls">
     <br>
     <label for="zoomRange">Adjust Zoom:</label>
@@ -60,7 +60,7 @@
       scanner = new Html5Qrcode("reader");
      
  const camera = { facingMode: 'environment' }
-          const qrBoxSize = 250
+          const qrBoxSize = 300
           const width = window.innerWidth
           const height = window.innerHeight
           const aspectRatio = width / height
@@ -74,7 +74,7 @@ const mobileAspectRatio = reverseAspectRatio > 1.5
 
 
 const config = {
-            fps: 2, // frame per seconds for qr code scanning
+            fps: 15, // frame per seconds for qr code scanning
             qrbox: { width: qrBoxSize, height: qrBoxSize },
             videoConstraints: {
               facingMode: 'environment',
