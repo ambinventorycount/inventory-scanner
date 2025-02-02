@@ -60,15 +60,14 @@
       scanner = new Html5Qrcode("reader");
       scanner.start(
         { facingMode: "environment" }, // Use rear camera
-          width: { min: 400, ideal: 720 },
-          height: { min: 400, ideal: 720 },
         {
           fps: 10,
-         // qrbox: { width: 300, height: 130 },
-	   showTorchButtonIfSupported: true,
-          showZoomSliderIfSupported: true,
-	  useBarCodeDetectorIfSupported: true,
-          defaultZoomValueIfSupported: 4
+      videoConstraints: {
+         width: 1920,
+         height: 1080,
+         facingMode: "environment",
+         // qrbox: { width: 400, height: 400 },
+
         },
         (decodedText) => {
           // When a barcode is decoded, populate the appropriate input field.
