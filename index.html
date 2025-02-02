@@ -1,309 +1,179 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mobile Barcode Scanner using html5-qrcode</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode Scanner</title>
   <!-- Include html5-qrcode library -->
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 10px;
-    }
-    /* Adjust the scanner view container to be 50% smaller */
-    #reader {
-      width: 50%;
-      max-width: 200px;
-      margin: auto;
-      border: 1px solid #ccc;
-      position: relative;
-    }
-    /* Ensure the video inside the scanner fills the container */
-    #reader video {
-      width: 100%;
-      height: auto;
-    }
-    .controls,
-    .manual-input {
-      margin: 10px 0;
       text-align: center;
+      padding: 20px;
     }
-    label {
-      display: block;
-      margin-top: 10px;
+    #reader {
+      width: 300px;
+      margin: auto;
     }
-    input[type="text"],
-    input[type="range"] {
+    input {
       width: 90%;
       padding: 8px;
-      font-size: 1em;
+      margin: 10px;
     }
     button {
       padding: 10px 15px;
-      font-size: 1em;
-      margin-top: 10px;
+      margin: 10px;
+      cursor: pointer;
     }
-    /* Display area for device info and record counter */
-    #info-area {
-      text-align: center;
-      margin: 10px 0;
+    .controls {
+      margin-top: 20px;
     }
   </style>
 </head>
 <body>
-  <h1>Mobile Barcode Scanner using html5-qrcode</h1>
+  <h2>Scan Item & Serial Barcodes</h2>
   
-  <!-- Display Device Info and Record Counter -->
-  <div id="info-area">
-    <div id="device-info">Device: Detecting...</div>
-    <div id="record-counter">Records submitted: 0</div>
-  </div>
-
-  <!-- Scanner View (50% smaller) -->
+  <!-- Barcode Scanner -->
   <div id="reader"></div>
   
-  <!-- Scanner Controls -->
+  <!-- Input Fields -->
+  <input type="text" id="itemBarcode" placeholder="Item Barcode">
+  <input type="text" id="serialBarcode" placeholder="Serial Barcode">
+  
+  <!-- Control Buttons -->
+  <button onclick="startScanner()">Start Scanning</button>
+  <button onclick="stopScanner()">Stop Scanner</button>
+  <button onclick="saveToGoogleSheets()">Save Record</button>
+  
   <div class="controls">
-    <button id="start-scan">Start Scan</button>
-    <button id="stop-scan" disabled>Stop Scan</button>
-    <br />
-    <label for="brightness">Brightness:</label>
-    <input type="range" id="brightness" min="0" max="2" step="0.1" value="1" />
-    <br />
-    <label for="focus">Focus (if supported):</label>
-    <input type="range" id="focus" min="0" max="100" step="1" value="50" />
-    <br />
-    <label for="zoom">Zoom (if supported):</label>
-    <input type="range" id="zoom" min="1" max="5" step="0.1" value="1" />
+    <button id="toggleTorch">Toggle Torch</button>
+    <br>
+    <label for="focusRange">Adjust Focus:</label>
+    <input type="range" id="focusRange" min="0" max="10" step="0.1" value="0">
   </div>
-
-  <!-- Manual Input Form -->
-  <div class="manual-input">
-    <h2>Manual Input</h2>
-    <form id="manual-form">
-      <label for="itemBarcode">Item Barcode:</label>
-      <input type="text" id="itemBarcode" name="itemBarcode" required />
-      
-      <label for="serialBarcode">Serial Barcode:</label>
-      <input type="text" id="serialBarcode" name="serialBarcode" required />
-      
-      <button type="submit">Submit Record</button>
-    </form>
-  </div>
-
+  
   <script>
-    let html5QrCode;          // Instance of the scanner
-    let scanning = false;
-    let lastScannedItem = "";
-    let lastScannedSerial = "";
-    let activeStreamTrack = null;
-    let recordCounter = 0;    // Counter for successfully submitted records
+    let scanner;
+    let scanningItem = true; // Track which barcode is being scanned (first: item, then serial)
 
-    const startButton = document.getElementById("start-scan");
-    const stopButton = document.getElementById("stop-scan");
-    const deviceInfoElem = document.getElementById("device-info");
-    const recordCounterElem = document.getElementById("record-counter");
-
-    // Attempt to parse device information from the user agent.
-    // Note: This is heuristic and may not produce accurate results on all devices.
-    function getDeviceInfo() {
-      const ua = navigator.userAgent;
-      let deviceInfo = "Unknown Device";
-      
-      if (/android/i.test(ua)) {
-        const versionMatch = ua.match(/Android\s([0-9\.]+)/i);
-        const modelMatch = ua.match(/;\s([^;]*\sBuild)/i);
-        const version = versionMatch ? versionMatch[1] : "";
-        let model = "";
-        if (modelMatch) {
-          model = modelMatch[1].replace(" Build", "").trim();
+    // Start the barcode scanner
+    function startScanner() {
+      // Create a new instance of the scanner using the "reader" div
+      scanner = new Html5Qrcode("reader");
+      scanner.start(
+        { facingMode: "environment" }, // Use rear camera
+        { fps: 10, qrbox: { width: 300, height: 250 } },
+        (decodedText) => {
+          // When a barcode is decoded, populate the appropriate input field.
+          if (scanningItem) {
+            document.getElementById("itemBarcode").value = decodedText;
+            scanningItem = false;
+          } else {
+            document.getElementById("serialBarcode").value = decodedText;
+            // Stop scanning after the serial barcode is captured.
+            stopScanner();
+            // Reset for the next scan session if desired:
+            scanningItem = true;
+          }
+        },
+        (errorMessage) => {
+          console.warn("Scan error:", errorMessage);
         }
-        deviceInfo = "Android " + version + (model ? " " + model : "");
-      } else if (/iPhone|iPad|iPod/i.test(ua)) {
-        const versionMatch = ua.match(/OS\s([\d_]+)/i);
-        const version = versionMatch ? versionMatch[1].replace(/_/g, ".") : "";
-        deviceInfo = "iOS " + version + " (iPhone/iPad)";
-      } else {
-        deviceInfo = navigator.platform;
-      }
-      return deviceInfo;
+      ).then(() => {
+        console.log("Scanner started successfully.");
+      }).catch((err) => {
+        console.error("Unable to start scanning.", err);
+      });
     }
 
-    // Set the device info on page load.
-    deviceInfoElem.textContent = "Device: " + getDeviceInfo();
-
-    // Start the scanner using html5-qrcode
-    startButton.addEventListener("click", () => {
-      if (scanning) return;
-      scanning = true;
-      startButton.disabled = true;
-      stopButton.disabled = false;
-
-      html5QrCode = new Html5Qrcode("reader");
-      
-      // Updated configuration:
-      // - Increased qrbox size for better detection of larger barcode regions.
-      // - Added formatsToSupport option with common barcode formats (experimental).
-      const config = { 
-        fps: 10, 
-        qrbox: 300,
-    showZoomSliderIfSupported: true,
-    // Optional: Set a default zoom value (e.g., 2x zoom)
-    defaultZoomValueIfSupported: 2
-
-        // The following option is experimental and may be subject to change in future releases.
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.ITF
-        ]
-      };
-
-      // Retrieve available cameras and use the default (first) one.
-      Html5Qrcode.getCameras().then(cameras => {
-        if (cameras && cameras.length) {
-          const defaultCamera = cameras[0];
-          console.log("Starting scanner on camera:", defaultCamera);
-          html5QrCode.start(
-            defaultCamera.id,
-            config,
-            (decodedText, decodedResult) => {
-              console.log("Decoded text:", decodedText);
-              // Process decoded text.
-              // Assume the first detected code is the "Item" barcode
-              // and the second (if different) is the "Serial" barcode.
-              if (!lastScannedItem) {
-                lastScannedItem = decodedText;
-                alert("Item Barcode detected: " + decodedText);
-              } else if (!lastScannedSerial && decodedText !== lastScannedItem) {
-                lastScannedSerial = decodedText;
-                alert("Serial Barcode detected: " + decodedText);
-                // Once both are detected, record the data.
-                recordData(lastScannedItem, lastScannedSerial);
-                // Reset stored values for the next scan.
-                lastScannedItem = "";
-                lastScannedSerial = "";
-              }
-            },
-            (errorMessage) => {
-              // Optional error callback.
-              console.warn("Scan error:", errorMessage);
-            }
-          ).then(() => {
-            console.log("Scanning started successfully.");
-            // Retrieve the underlying video track for adjustments.
-            const videoElem = document.querySelector("#reader video");
-            if (videoElem && videoElem.srcObject) {
-              const tracks = videoElem.srcObject.getVideoTracks();
-              if (tracks && tracks.length > 0) {
-                activeStreamTrack = tracks[0];
-              }
-            }
-          }).catch((err) => {
-            console.error("Unable to start scanning.", err);
-          });
-        } else {
-          console.error("No cameras found.");
-        }
-      }).catch(err => {
-        console.error("Error retrieving cameras.", err);
-      });
-    });
-
     // Stop the scanner
-    stopButton.addEventListener("click", () => {
-      if (!scanning) return;
-      scanning = false;
-      startButton.disabled = false;
-      stopButton.disabled = true;
-      html5QrCode.stop().then(() => {
-        console.log("Scanner stopped.");
-      }).catch((err) => {
-        console.error("Error stopping scanner.", err);
-      });
-    });
+    function stopScanner() {
+      if (scanner) {
+        scanner.stop().then(() => {
+          console.log("Scanner stopped.");
+        }).catch((err) => {
+          console.error("Error stopping scanner:", err);
+        });
+      }
+    }
 
-    // Adjust brightness by applying a CSS filter to the video element inside #reader.
-    document.getElementById("brightness").addEventListener("input", function () {
-      const brightnessValue = this.value;
-      const videoElem = document.querySelector("#reader video");
-      if (videoElem) {
-        videoElem.style.filter = `brightness(${brightnessValue})`;
+    // Torch (flash) toggle functionality
+    document.getElementById("toggleTorch").addEventListener("click", () => {
+      const track = getVideoTrack();
+      if (track) {
+        const capabilities = track.getCapabilities();
+        if (capabilities.torch) {
+          const settings = track.getSettings();
+          const currentTorch = settings.torch || false;
+          track.applyConstraints({ advanced: [{ torch: !currentTorch }] })
+            .then(() => console.log("Torch toggled"))
+            .catch(err => console.error("Torch toggle error:", err));
+        } else {
+          alert("Torch not supported on this device.");
+        }
+      } else {
+        alert("Video track not available.");
       }
     });
 
-    // Attempt to adjust focus using media track constraints.
-    document.getElementById("focus").addEventListener("input", function () {
-      const focusValue = parseInt(this.value);
-      if (activeStreamTrack) {
-        const capabilities = activeStreamTrack.getCapabilities();
+    // Focus adjustment control
+    document.getElementById("focusRange").addEventListener("input", (e) => {
+      const track = getVideoTrack();
+      if (track) {
+        const capabilities = track.getCapabilities();
         if (capabilities.focusDistance) {
-          const settings = { focusDistance: focusValue };
-          activeStreamTrack.applyConstraints({ advanced: [settings] })
-            .then(() => console.log("Focus adjusted:", focusValue))
+          track.applyConstraints({
+            advanced: [{
+              focusMode: "manual",
+              focusDistance: parseFloat(e.target.value)
+            }]
+          }).then(() => console.log("Focus adjusted"))
             .catch(err => console.error("Focus adjustment error:", err));
         } else {
-          console.warn("Focus adjustment not supported by this camera.");
+          console.log("Focus adjustment not supported.");
         }
       }
     });
 
-    // Attempt to adjust zoom using media track constraints.
-    document.getElementById("zoom").addEventListener("input", function () {
-      const zoomValue = parseFloat(this.value);
-      if (activeStreamTrack) {
-        const capabilities = activeStreamTrack.getCapabilities();
-        if (capabilities.zoom) {
-          const settings = { zoom: zoomValue };
-          activeStreamTrack.applyConstraints({ advanced: [settings] })
-            .then(() => console.log("Zoom adjusted:", zoomValue))
-            .catch(err => console.error("Zoom adjustment error:", err));
+    // Helper function to retrieve the video track from the scanner's video element
+    function getVideoTrack() {
+      const videoElem = document.querySelector("#reader video");
+      if (videoElem && videoElem.srcObject) {
+        const tracks = videoElem.srcObject.getVideoTracks();
+        if (tracks && tracks.length > 0) {
+          return tracks[0];
+        }
+      }
+      return null;
+    }
+
+    // Save the scanned/entered data to Google Sheets using a Google Apps Script endpoint
+    async function saveToGoogleSheets() {
+      const itemBarcode = document.getElementById("itemBarcode").value;
+      const serialBarcode = document.getElementById("serialBarcode").value;
+      if (!itemBarcode || !serialBarcode) {
+        alert("Please scan or enter both barcodes!");
+        return;
+      }
+      const scriptURL = "https://script.google.com/macros/s/AKfycbwXB6XxWn0GVMSEXr6PlTrwXFMGG29RCwBm0sjAkTa4/dev";
+      const data = { item: itemBarcode, serial: serialBarcode };
+      try {
+        const response = await fetch(scriptURL, {
+          method: "POST",
+          body: JSON.stringify(data),
+          headers: { "Content-Type": "application/json" }
+        });
+        if (response.ok) {
+          alert("Data saved successfully!");
         } else {
-          console.warn("Zoom adjustment not supported by this camera.");
+          alert("Error saving data!");
         }
+      } catch (error) {
+        console.error("Error saving data:", error);
+        alert("Error saving data!");
       }
-    });
-
-    // Handle manual form submission.
-    document.getElementById("manual-form").addEventListener("submit", function (e) {
-      e.preventDefault();
-      const item = document.getElementById("itemBarcode").value;
-      const serial = document.getElementById("serialBarcode").value;
-      recordData(item, serial);
-    });
-
-    // Send data to Google Sheets using a Google Apps Script Web App endpoint.
-    function recordData(item, serial) {
-      // Replace with your actual Google Apps Script Web App URL.
-      const scriptURL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
-      const data = {
-        itemBarcode: item,
-        serialBarcode: serial,
-        timestamp: new Date().toISOString()
-      };
-
-      fetch(scriptURL, {
-        method: 'POST',
-        body: JSON.stringify(data),
-        headers: { 'Content-Type': 'application/json' }
-      })
-      .then(response => response.json())
-      .then(responseJson => {
-        alert("Data recorded successfully!");
-        console.log("Response from server:", responseJson);
-        // Increment and update the record submission counter.
-        recordCounter++;
-        recordCounterElem.textContent = "Records submitted: " + recordCounter;
-      })
-      .catch(error => {
-        console.error("Error recording data:", error);
-        alert("Error recording data.");
-      });
     }
   </script>
 </body>
