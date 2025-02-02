@@ -32,7 +32,7 @@
   </style>
 </head>
 <body>
-  <h2>Scan Item & Serial Barcodes 5.2 12 </h2>
+  <h2>Scan Item & Serial Barcodes 5.2 13 </h2>
   <div class="controls">
     <br>
     <label for="zoomRange">Adjust Zoom:</label>
@@ -77,6 +77,9 @@ const config = {
             fps: 25, // frame per seconds for qr code scanning
             qrbox: { width: qrBoxSize, height: qrBoxSize },
             videoConstraints: {
+		showZoomSliderIfSupported: true,
+focusMode: "continuous",
+          advanced: [{ zoom: 2.0 }],
               facingMode: 'environment',
               aspectRatio: width < 600
                 ? mobileAspectRatio
