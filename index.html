@@ -50,7 +50,7 @@
     <button id="toggleTorch">Toggle Torch</button>
     <br>
     <label for="zoomRange">Adjust Zoom:</label>
-    <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="1">
+    <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="4">
   </div>
   
   <script>
@@ -65,7 +65,7 @@
         { facingMode: "environment" }, // Use rear camera
         { 
           fps: 10, 
-          qrbox: { width: 300, height: 250 },
+          qrbox: { width: 350, height: 200 },
           showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true
         },
@@ -103,24 +103,7 @@
       }
     }
 
-    // Torch (flash) toggle functionality
-    document.getElementById("toggleTorch").addEventListener("click", () => {
-      const track = getVideoTrack();
-      if (track) {
-        const capabilities = track.getCapabilities();
-        if (capabilities.torch) {
-          const settings = track.getSettings();
-          const currentTorch = settings.torch || false;
-          track.applyConstraints({ advanced: [{ torch: !currentTorch }] })
-            .then(() => console.log("Torch toggled"))
-            .catch(err => console.error("Torch toggle error:", err));
-        } else {
-          alert("Torch not supported on this device.");
-        }
-      } else {
-        alert("Video track not available.");
-      }
-    });
+
 
     // Zoom adjustment control
     document.getElementById("zoomRange").addEventListener("input", (e) => {
