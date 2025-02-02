@@ -47,10 +47,9 @@
   <button onclick="saveToGoogleSheets()">Save Record</button>
   
   <div class="controls">
-    <button id="toggleTorch">Toggle Torch</button>
-    <br>
+        <br>
     <label for="zoomRange">Adjust Zoom:</label>
-    <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="4">
+    <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="5">
   </div>
   
   <script>
@@ -65,7 +64,7 @@
         { facingMode: "environment" }, // Use rear camera
         { 
           fps: 10, 
-          qrbox: { width: 350, height: 200 },
+          qrbox: { width: 400, height: 300 },
           showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true
         },
