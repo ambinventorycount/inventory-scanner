@@ -62,9 +62,11 @@
         { facingMode: "environment" }, // Use rear camera
         {
           fps: 10,
-          qrbox: { width: 1920, height: 1000 },
+          qrbox: { width: 300, height: 130 },
+	  aspectRatio: isIOS ? 1.5 : 0,
           showTorchButtonIfSupported: true,
           showZoomSliderIfSupported: true,
+	  useBarCodeDetectorIfSupported: true,
           defaultZoomValueIfSupported: 4
         },
         (decodedText) => {
