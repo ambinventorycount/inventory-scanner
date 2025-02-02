@@ -32,7 +32,7 @@
   </style>
 </head>
 <body>
-  <h2>Scan Item & Serial Barcodes 5.2 -4 </h2>
+  <h2>Scan Item & Serial Barcodes 5.2 -5 </h2>
   <div class="controls">
     <br>
     <label for="zoomRange">Adjust Zoom:</label>
@@ -64,16 +64,24 @@
           const width = window.innerWidth
           const height = window.innerHeight
           const aspectRatio = width / height
+
+
+const mobileAspectRatio = reverseAspectRatio > 1.5
+            ? reverseAspectRatio + (reverseAspectRatio * 12 / 100)
+            : reverseAspectRatio 
+
+
+
+
 const config = {
-            fps: 20,
-            qrbox: { width: 250, height: 250 },
+            fps: 10, // frame per seconds for qr code scanning
+            qrbox: { width: qrBoxSize, height: qrBoxSize },
             videoConstraints: {
               facingMode: 'environment',
-              aspectRatio: this.isMobileWidth
-                ? aspectRatio + 1
+              aspectRatio: width < 600
+                ? mobileAspectRatio
                 : aspectRatio,
-            },
-}
+            },}
 
 
 
