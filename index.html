@@ -1,120 +1,235 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barcode Scanner</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 10px; }
-        .scanner-section { position: relative; margin: 10px 0; }
-        #scanner-preview { width: 100%; height: 300px; border: 2px solid #ccc; }
-        .controls { margin: 10px 0; }
-        button { padding: 10px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 5px; }
-        input { width: 100%; padding: 10px; margin: 5px 0; }
-        .form-section { margin: 20px 0; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mobile Barcode Scanner</title>
+  <!-- Include QuaggaJS from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 10px;
+    }
+    #interactive {
+      position: relative;
+      width: 100%;
+      max-width: 400px;
+      margin: auto;
+      border: 1px solid #ccc;
+    }
+    video,
+    canvas {
+      width: 100%;
+      height: auto;
+    }
+    .controls,
+    .manual-input {
+      margin: 10px 0;
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    input[type="text"] {
+      width: 90%;
+      padding: 8px;
+      font-size: 1em;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 1em;
+      margin-top: 10px;
+    }
+  </style>
 </head>
 <body>
-    <h1>Scan Barcodes</h1>
-    
-    <!-- Scanner Section -->
-    <div class="scanner-section">
-        <div id="scanner-preview"></div>
-        <div class="controls">
-            <button onclick="toggleCamera()">Toggle Camera</button>
-            <button onclick="toggleTorch()">Toggle Torch</button>
-        </div>
-    </div>
+  <h1>Mobile Barcode Scanner</h1>
 
-    <!-- Manual Input Section -->
-    <div class="form-section">
-        <input type="text" id="itemBarcode" placeholder="Item Barcode">
-        <input type="text" id="serialBarcode" placeholder="Serial Barcode">
-        <button onclick="submitData()">Submit</button>
-    </div>
+  <!-- Scanner View -->
+  <div id="interactive" class="viewport"></div>
+  
+  <!-- Scanner Controls -->
+  <div class="controls">
+    <button id="start-scan">Start Scan</button>
+    <button id="stop-scan" disabled>Stop Scan</button>
+    <br />
+    <label for="brightness">Brightness:</label>
+    <input type="range" id="brightness" min="0" max="2" step="0.1" value="1" />
+    <br />
+    <label for="focus">Focus (if supported):</label>
+    <input type="range" id="focus" min="0" max="100" step="1" value="50" />
+  </div>
 
-    <script>
-        let scannerActive = false;
-        let currentTorch = false;
+  <!-- Manual Input Form -->
+  <div class="manual-input">
+    <h2>Manual Input</h2>
+    <form id="manual-form">
+      <label for="itemBarcode">Item Barcode:</label>
+      <input type="text" id="itemBarcode" name="itemBarcode" required />
+      
+      <label for="serialBarcode">Serial Barcode:</label>
+      <input type="text" id="serialBarcode" name="serialBarcode" required />
+      
+      <button type="submit">Submit Record</button>
+    </form>
+  </div>
 
-        function initializeScanner() {
-            Quagga.init({
-                inputStream: {
-                    name: "Live",
-                    type: "LiveStream",
-                    target: document.querySelector('#scanner-preview'),
-                    constraints: {
-                        facingMode: "environment",
-                        focusMode: "continuous",
-                        advanced: { torch: currentTorch }
-                    }
-                },
-                decoder: {
-                    readers: ["code_128_reader", "ean_reader", "upc_reader", "code_39_reader"]
-                }
-            }, function(err) {
-                if (err) {
-                    console.error(err);
-                    return;
-                }
-                Quagga.start();
-                scannerActive = true;
-            });
+  <script>
+    // Global variables to store state
+    let scanning = false;
+    let lastScannedItem = "";
+    let lastScannedSerial = "";
+    let activeStreamTrack = null;
 
-            Quagga.onDetected(function(result) {
-                const code = result.codeResult.code;
-                if (!document.getElementById('itemBarcode').value) {
-                    document.getElementById('itemBarcode').value = code;
-                } else {
-                    document.getElementById('serialBarcode').value = code;
-                    Quagga.stop();
-                    scannerActive = false;
-                }
-            });
+    // Start the scanner using QuaggaJS
+    function startScanner() {
+      if (scanning) return;
+      scanning = true;
+      document.getElementById("start-scan").disabled = true;
+      document.getElementById("stop-scan").disabled = false;
+
+      Quagga.init({
+        inputStream: {
+          name: "Live",
+          type: "LiveStream",
+          target: document.querySelector("#interactive"),
+          constraints: {
+            facingMode: "environment"
+            // You can add advanced constraints here if supported
+            // For example: advanced: [{ focusMode: "continuous" }]
+          }
+        },
+        decoder: {
+          // Enable various barcode readers
+          readers: [
+            "code_128_reader",
+            "ean_reader",
+            "ean_8_reader",
+            "upc_reader",
+            "upc_e_reader",
+            "code_39_reader",
+            "code_39_vin_reader",
+            "codabar_reader",
+            "i2of5_reader",
+            "2of5_reader",
+            "code_93_reader"
+          ]
+        },
+        locate: true
+      }, function (err) {
+        if (err) {
+          console.error(err);
+          return;
         }
+        console.log("Quagga initialization finished. Ready to start");
+        Quagga.start();
 
-        function toggleCamera() {
-            if (scannerActive) {
-                Quagga.stop();
-                scannerActive = false;
-            } else {
-                initializeScanner();
-            }
+        // Try to get the active video track for advanced controls
+        const track = Quagga.CameraAccess.getActiveTrack();
+        if (track) {
+          activeStreamTrack = track;
         }
+      });
 
-        function toggleTorch() {
-            currentTorch = !currentTorch;
-            if (scannerActive) {
-                Quagga.stop();
-                initializeScanner();
-            }
+      // Process detected barcodes
+      Quagga.onDetected(onBarcodeDetected);
+    }
+
+    // Handle a detected barcode
+    function onBarcodeDetected(result) {
+      const code = result.codeResult.code;
+      console.log("Detected barcode:", code);
+
+      // For demonstration:
+      // - The first detected barcode is assumed to be the Item barcode.
+      // - The second detected (and different) barcode is the Serial barcode.
+      if (!lastScannedItem) {
+        lastScannedItem = code;
+        alert("Item Barcode detected: " + code);
+      } else if (!lastScannedSerial && code !== lastScannedItem) {
+        lastScannedSerial = code;
+        alert("Serial Barcode detected: " + code);
+        // Once both barcodes are scanned, send the record.
+        recordData(lastScannedItem, lastScannedSerial);
+        // Reset for next scan session.
+        lastScannedItem = "";
+        lastScannedSerial = "";
+      }
+    }
+
+    // Stop the scanner
+    function stopScanner() {
+      if (!scanning) return;
+      scanning = false;
+      document.getElementById("start-scan").disabled = false;
+      document.getElementById("stop-scan").disabled = true;
+      Quagga.stop();
+    }
+
+    // Adjust brightness by modifying the CSS filter on the video element.
+    document.getElementById("brightness").addEventListener("input", function () {
+      const brightnessValue = this.value;
+      const videoElem = document.querySelector("#interactive video");
+      if (videoElem) {
+        videoElem.style.filter = `brightness(${brightnessValue})`;
+      }
+    });
+
+    // Attempt to adjust focus using media track constraints (may not be supported on many devices).
+    document.getElementById("focus").addEventListener("input", function () {
+      const focusValue = parseInt(this.value);
+      if (activeStreamTrack) {
+        const capabilities = activeStreamTrack.getCapabilities();
+        if (capabilities.focusDistance) {
+          const settings = { focusDistance: focusValue };
+          activeStreamTrack.applyConstraints({ advanced: [settings] })
+            .then(() => console.log("Focus adjusted:", focusValue))
+            .catch(err => console.error("Focus adjustment error:", err));
+        } else {
+          console.warn("Focus adjustment not supported by this camera.");
         }
+      }
+    });
 
-        function submitData() {
-            const item = document.getElementById('itemBarcode').value;
-            const serial = document.getElementById('serialBarcode').value;
-            
-            // Replace with your Google Sheets script URL
-            const scriptURL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
-            
-            fetch(scriptURL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    itemBarcode: item,
-                    serialBarcode: serial,
-                    timestamp: new Date().toISOString()
-                }),
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => alert('Data submitted successfully!'))
-            .catch(error => alert('Error submitting data!'));
-        }
+    // Handle manual form submission.
+    document.getElementById("manual-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const item = document.getElementById("itemBarcode").value;
+      const serial = document.getElementById("serialBarcode").value;
+      recordData(item, serial);
+    });
 
-        // Initialize scanner on load
-        initializeScanner();
-    </script>
+    // Send data to Google Sheets using a Google Apps Script Web App endpoint.
+    function recordData(item, serial) {
+      // Replace with your actual Google Apps Script Web App URL.
+      const scriptURL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+      const data = {
+        itemBarcode: item,
+        serialBarcode: serial,
+        timestamp: new Date().toISOString()
+      };
+
+      fetch(scriptURL, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' }
+      })
+        .then(response => response.json())
+        .then(responseJson => {
+          alert("Data recorded successfully!");
+          console.log("Response from server:", responseJson);
+        })
+        .catch(error => {
+          console.error("Error recording data:", error.message);
+          alert("Error recording data.");
+        });
+    }
+
+    // Button event listeners
+    document.getElementById("start-scan").addEventListener("click", startScanner);
+    document.getElementById("stop-scan").addEventListener("click", stopScanner);
+  </script>
 </body>
 </html>
