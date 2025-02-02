@@ -2,210 +2,139 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barcode Scanner</title>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 10px;
-            font-family: Arial, sans-serif;
-        }
-        .scanner-container {
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        #reader {
-            width: 100%;
-            height: 300px;
-            border: 2px solid #ccc;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-        .controls {
-            margin: 10px 0;
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        button {
-            padding: 10px 15px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        button:disabled {
-            background: #cccccc;
-        }
-        .result {
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .scanned {
-            background-color: #e8ffe8;
-        }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 </head>
-<body>
-    <h2>Barcode Scanner</h2>
+<body class="container mt-4">
+    <h2 class="mb-4">Barcode Scanner</h2>
     
-    <div class="scanner-container">
-        <div id="reader"></div>
+    <!-- Scan Buttons -->
+    <button class="btn btn-primary mb-2" onclick="startScanner('item')">Scan Item Barcode</button>
+    <button class="btn btn-primary mb-4" onclick="startScanner('serial')">Scan Serial Barcode</button>
+
+    <!-- Input Fields -->
+    <div class="mb-3">
+        <input type="text" id="item" class="form-control mb-2" placeholder="Item Barcode">
+        <input type="text" id="serial" class="form-control" placeholder="Serial Barcode">
     </div>
 
-    <div class="controls">
-        <button id="toggleTorch">Toggle Light</button>
-        <button id="switchCamera">Switch Camera</button>
-        <button id="triggerFocus">Focus</button>
-    </div>
+    <!-- Manual Entry Toggle -->
+    <button class="btn btn-secondary mb-2" onclick="toggleManualEntry()">Manual Entry</button>
+    
+    <!-- Save Button -->
+    <button class="btn btn-success mb-4" onclick="saveToGoogleSheets()">Save Record</button>
 
-    <div class="result" id="itemResult">
-        <strong>Item Barcode:</strong> <span id="itemValue">Not scanned</span>
+    <!-- Scanner Preview -->
+    <div id="scanner-container" style="display: none;">
+        <div id="scanner" style="width: 100%; height: 300px;"></div>
+        <button class="btn btn-danger mt-2" onclick="stopScanner()">Stop Scanner</button>
     </div>
-
-    <div class="result" id="serialResult">
-        <strong>Serial Barcode:</strong> <span id="serialValue">Not scanned</span>
-    </div>
-
-    <button id="resetButton" style="background: #28a745;">Reset Scanner</button>
 
     <script>
-        let html5QrcodeScanner;
-        let currentCameraId = null;
-        let itemScanned = false;
-        let serialScanned = false;
-
-        const formatsToSupport = [
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.QR_CODE
-        ];
-
-        function startScanner(cameraId) {
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", {
-                fps: 10,
-                qrbox: { width: 250, height: 150 },
-                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-                formatsToSupport: formatsToSupport
-            });
-
-            const config = cameraId ? { deviceId: cameraId } : { facingMode: "environment" };
+        let currentScannerType = '';
+        let scannerActive = false;
+        
+        function startScanner(type) {
+            if (scannerActive) {
+                stopScanner();
+                return;
+            }
             
-            Html5Qrcode.getCameras().then(devices => {
-                if (devices && devices.length) {
-                    currentCameraId = devices[0].id;
-                }
-            });
-
-            Html5QrcodeScanner.start(
-                config,
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 150 }
+            currentScannerType = type;
+            document.getElementById('scanner-container').style.display = 'block';
+            
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#scanner'),
+                    constraints: {
+                        facingMode: "environment"
+                    }
                 },
-                onScanSuccess,
-                onScanError
-            ).then(() => {
-                updateControlStates();
-            }).catch(err => {
-                alert(`Error starting scanner: ${err}`);
-            });
-        }
-
-        function onScanSuccess(decodedText, decodedResult) {
-            // Determine barcode type (modify this logic based on your needs)
-            const isItemBarcode = decodedText.startsWith("ITEM:");
-            const isSerialBarcode = decodedText.startsWith("SN:");
-
-            if (isItemBarcode && !itemScanned) {
-                document.getElementById('itemValue').textContent = decodedText.split(":")[1];
-                document.getElementById('itemResult').classList.add('scanned');
-                itemScanned = true;
-                playSuccessSound();
-            } else if (isSerialBarcode && !serialScanned) {
-                document.getElementById('serialValue').textContent = decodedText.split(":")[1];
-                document.getElementById('serialResult').classList.add('scanned');
-                serialScanned = true;
-                playSuccessSound();
-            }
-
-            if (itemScanned && serialScanned) {
-                html5QrcodeScanner.stop().then(() => {
-                    alert('Both barcodes scanned successfully!');
-                });
-            }
-        }
-
-        function playSuccessSound() {
-            const audio = new Audio('data:audio/wav;base64,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qJrx4KOQjahZxWbcZgztj2c49nKmkId44S71j0c8eV9yDK6uPRzx5X18eDvjvQ6yKo9ZSS6l//8elePK/Lf//IInrOF/FvDoADYAGBMGb7FtErm5MXMlmPAJQVgWta7Zx2go+8xJ0UiCb8LHHdftWyLJE0QIAIsI+UbXu67dZMjmgDGCGl1H+vpF4NSDckSIkk7Vd+sxEhBQMRU8j/12UIRhzSaUdQ+rQU5kGeFxm+hb1oh6pWWmv3uvmReDl0UnvtapVaIzo1jZbf/pD6ElLqSX+rUmOQNpJFa/r+sa4e/pBlAABoAAAAA3CUgShLdGIxsY7AUABPRrgCABdDuQ5GC7DqPQCgbbJUAoRSUj+NIEig0YfyWUho1VBBBA//uQZB4ABZx5zfMakeAAAAmwAAAAF5F3P0w9GtAAACfAAAAAwLhMDmAYWMgVEG1U0FIGCBgXBXAtfMH10000EEEEEECUBYln03TTTdNBDZopopYvrTTdNa325mImNg3TTPV9q3pmY0xoO6bv3r00y+IDGid/9aaaZTGMuj9mpu9Mpio1dXrr5HERTZSmqU36A3CumzN/9Robv/Xx4v9ijkSRSNLQhAWumap82WRSBUqXStV/YcS+XVLnSS+WLDroqArFkMEsAS+eWmrUzrO0oEmE40RlMZ5+ODIkAyKAGUwZ3mVKmcamcJnMW26MRPgUw6j+LkhyHGVGYjSUUKNpuJUQoOIAyDvEyG8S5yfK6dhZc0Tx1KI/gviKL6qvvFs1+bWtaz58uUNnryq6kt5RzOCkPWlVqVX2a/EEBUdU1KrXLf40GoiiFXK///qpoiDXrOgqDR38JB0bw7SoL+ZB9o1RCkQjQ2CBYZKd/+VJxZRRZlqSkKiws0WFxUyCwsKiMy7hUVFhIaCrNQsKkTIsLivwKKigsj8XYlwt/WKi2N4d//uQRCSAAjURNIHpMZBGYiaQPSYyAAABLAAAAAAAACWAAAAApUF/Mg+0aohSIRobBAsMlO//Kk4soosy1JSFRYWaLC4qZBYWFRGZdwqKiwkNBVmoWFSJkWFxX4FFRQWR+LsS4W/rFRb/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////VEFHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAU291bmRib3kuZGUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMjAwNGh0dHA6Ly93d3cuc291bmRib3kuZGUAAAAAAAAAACU=');
-            audio.play();
-        }
-
-        function onScanError(errorMessage) {
-            // Handle scan error
-        }
-
-        function updateControlStates() {
-            if (!html5QrcodeScanner) return;
-            
-            const capabilities = html5QrcodeScanner.getRunningTrackCapabilities();
-            const torchBtn = document.getElementById('toggleTorch');
-            const focusBtn = document.getElementById('triggerFocus');
-            
-            torchBtn.disabled = !capabilities.torch;
-            focusBtn.disabled = !capabilities.focus;
-        }
-
-        // Control Handlers
-        document.getElementById('toggleTorch').addEventListener('click', () => {
-            html5QrcodeScanner.toggleTorch().catch(err => {
-                alert('Torch not supported on this device');
-            });
-        });
-
-        document.getElementById('switchCamera').addEventListener('click', () => {
-            Html5Qrcode.getCameras().then(devices => {
-                if (devices.length <= 1) {
-                    alert('No alternate camera found');
+                decoder: {
+                    readers: [
+                        'code_128_reader',
+                        'code_39_reader',
+                        'upc_reader',
+                        'upc_e_reader'
+                    ]
+                }
+            }, function(err) {
+                if (err) {
+                    console.error('Quagga init error:', err);
+                    alert('Error initializing scanner. Check console for details.');
                     return;
                 }
-                const newCameraId = devices.find(device => device.id !== currentCameraId).id;
-                html5QrcodeScanner.stop().then(() => {
-                    startScanner(newCameraId);
+                scannerActive = true;
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function(result) {
+                if (!scannerActive) return;
+                const code = result.codeResult.code;
+                document.getElementById(currentScannerType).value = code;
+                stopScanner();
+            });
+        }
+
+        function stopScanner() {
+            if (scannerActive) {
+                Quagga.stop();
+                scannerActive = false;
+            }
+            document.getElementById('scanner-container').style.display = 'none';
+        }
+
+        function toggleManualEntry() {
+            const inputs = document.querySelectorAll('input');
+            const btn = document.querySelector('[onclick="toggleManualEntry()"]');
+            inputs.forEach(input => {
+                input.disabled = !input.disabled;
+                input.placeholder = input.disabled ? 'Use scanner' : input.id === 'item' ? 'Item Barcode' : 'Serial Barcode';
+            });
+            btn.textContent = inputs[0].disabled ? 'Enable Scanner' : 'Manual Entry';
+        }
+
+        async function saveToGoogleSheets() {
+            const item = document.getElementById('item').value.trim();
+            const serial = document.getElementById('serial').value.trim();
+            
+            if (!item || !serial) {
+                alert('Please fill both fields before saving!');
+                return;
+            }
+
+            const scriptURL = 'YOUR_GOOGLE_SCRIPT_URL_HERE';
+            
+            try {
+                const response = await fetch(scriptURL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        item: item,
+                        serial: serial,
+                        timestamp: new Date().toISOString()
+                    })
                 });
-            });
-        });
 
-        document.getElementById('triggerFocus').addEventListener('click', () => {
-            html5QrcodeScanner.triggerFocus().catch(err => {
-                alert('Manual focus not supported');
-            });
-        });
+                if (!response.ok) throw new Error('Network response was not ok');
+                
+                alert('Data saved successfully!');
+                document.getElementById('item').value = '';
+                document.getElementById('serial').value = '';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error saving data: ' + error.message);
+            }
+        }
 
-        document.getElementById('resetButton').addEventListener('click', () => {
-            html5QrcodeScanner.stop().then(() => {
-                itemScanned = false;
-                serialScanned = false;
-                document.getElementById('itemValue').textContent = 'Not scanned';
-                document.getElementById('serialValue').textContent = 'Not scanned';
-                document.getElementById('itemResult').classList.remove('scanned');
-                document.getElementById('serialResult').classList.remove('scanned');
-                startScanner(currentCameraId);
-            });
-        });
-
-        // Initialize scanner
-        startScanner();
+        // Automatically stop scanner when leaving page
+        window.addEventListener('beforeunload', stopScanner);
     </script>
 </body>
 </html>
