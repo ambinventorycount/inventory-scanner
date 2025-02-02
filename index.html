@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mobile Barcode Scanner with Zoom (Smaller Scanner Screen)</title>
+  <title>Mobile Barcode Scanner with Zoom</title>
   <!-- Include QuaggaJS from CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <style>
@@ -11,11 +11,11 @@
       font-family: Arial, sans-serif;
       margin: 10px;
     }
-    /* Modified scanner container to be approximately 50% smaller */
+    /* Modified scanner container to be 50% smaller than before */
     #interactive {
       position: relative;
-      width: 50%;         /* Reduced width to 50% */
-      max-width: 200px;   /* Adjust maximum width as needed */
+      width: 50%;         /* Changed from 100% to 50% */
+      max-width: 200px;   /* Reduced max-width from 400px to 200px */
       margin: auto;
       border: 1px solid #ccc;
     }
@@ -47,7 +47,7 @@
   </style>
 </head>
 <body>
-  <h1>Mobile Barcode Scanner with Zoom (Smaller Scanner Screen)</h1>
+  <h1>Mobile Barcode Scanner with Zoom</h1>
 
   <!-- Scanner View -->
   <div id="interactive" class="viewport"></div>
@@ -167,4 +167,98 @@
         // Once both barcodes are scanned, send the record.
         recordData(lastScannedItem, lastScannedSerial);
         // Reset for next scan session.
-        
+        lastScannedItem = "";
+        lastScannedSerial = "";
+      }
+    }
+
+    // Stop the scanner
+    function stopScanner() {
+      if (!scanning) return;
+      scanning = false;
+      document.getElementById("start-scan").disabled = false;
+      document.getElementById("stop-scan").disabled = true;
+      Quagga.stop();
+    }
+
+    // Adjust brightness by modifying the CSS filter on the video element.
+    document.getElementById("brightness").addEventListener("input", function () {
+      const brightnessValue = this.value;
+      const videoElem = document.querySelector("#interactive video");
+      if (videoElem) {
+        videoElem.style.filter = `brightness(${brightnessValue})`;
+      }
+    });
+
+    // Attempt to adjust focus using media track constraints (may not be supported on many devices).
+    document.getElementById("focus").addEventListener("input", function () {
+      const focusValue = parseInt(this.value);
+      if (activeStreamTrack) {
+        const capabilities = activeStreamTrack.getCapabilities();
+        if (capabilities.focusDistance) {
+          const settings = { focusDistance: focusValue };
+          activeStreamTrack.applyConstraints({ advanced: [settings] })
+            .then(() => console.log("Focus adjusted:", focusValue))
+            .catch(err => console.error("Focus adjustment error:", err));
+        } else {
+          console.warn("Focus adjustment not supported by this camera.");
+        }
+      }
+    });
+
+    // Attempt to adjust zoom using media track constraints (if supported).
+    document.getElementById("zoom").addEventListener("input", function () {
+      const zoomValue = parseFloat(this.value);
+      if (activeStreamTrack) {
+        const capabilities = activeStreamTrack.getCapabilities();
+        if (capabilities.zoom) {
+          const settings = { zoom: zoomValue };
+          activeStreamTrack.applyConstraints({ advanced: [settings] })
+            .then(() => console.log("Zoom adjusted:", zoomValue))
+            .catch(err => console.error("Zoom adjustment error:", err));
+        } else {
+          console.warn("Zoom adjustment not supported by this camera.");
+        }
+      }
+    });
+
+    // Handle manual form submission.
+    document.getElementById("manual-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const item = document.getElementById("itemBarcode").value;
+      const serial = document.getElementById("serialBarcode").value;
+      recordData(item, serial);
+    });
+
+    // Send data to Google Sheets using a Google Apps Script Web App endpoint.
+    function recordData(item, serial) {
+      // Replace with your actual Google Apps Script Web App URL.
+      const scriptURL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+      const data = {
+        itemBarcode: item,
+        serialBarcode: serial,
+        timestamp: new Date().toISOString()
+      };
+
+      fetch(scriptURL, {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' }
+      })
+        .then(response => response.json())
+        .then(responseJson => {
+          alert("Data recorded successfully!");
+          console.log("Response from server:", responseJson);
+        })
+        .catch(error => {
+          console.error("Error recording data:", error.message);
+          alert("Error recording data.");
+        });
+    }
+
+    // Button event listeners
+    document.getElementById("start-scan").addEventListener("click", startScanner);
+    document.getElementById("stop-scan").addEventListener("click", stopScanner);
+  </script>
+</body>
+</html>
