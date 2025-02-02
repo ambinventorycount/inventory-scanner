@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mobile Barcode Scanner with Zoom (Enhanced Accuracy)</title>
-  <!-- Include QuaggaJS from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <title>Mobile Barcode Scanner using html5-qrcode</title>
+  <!-- Include html5-qrcode library -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 10px;
     }
-    /* Scanner view container at 50% of original size */
-    #interactive {
-      position: relative;
+    /* Adjust the scanner view container to be 50% smaller */
+    #reader {
       width: 50%;
       max-width: 200px;
       margin: auto;
       border: 1px solid #ccc;
+      position: relative;
     }
-    video,
-    canvas {
+    /* Ensure the video inside the scanner fills the container */
+    #reader video {
       width: 100%;
       height: auto;
     }
@@ -47,10 +47,10 @@
   </style>
 </head>
 <body>
-  <h1>Mobile Barcode Scanner with Zoom (Enhanced Accuracy)</h1>
+  <h1>Mobile Barcode Scanner using html5-qrcode</h1>
 
   <!-- Scanner View (50% smaller) -->
-  <div id="interactive" class="viewport"></div>
+  <div id="reader"></div>
   
   <!-- Scanner Controls -->
   <div class="controls">
@@ -64,7 +64,6 @@
     <input type="range" id="focus" min="0" max="100" step="1" value="50" />
     <br />
     <label for="zoom">Zoom (if supported):</label>
-    <!-- Default zoom value is 1; adjust min and max values based on your camera capabilities -->
     <input type="range" id="zoom" min="1" max="5" step="0.1" value="1" />
   </div>
 
@@ -83,119 +82,91 @@
   </div>
 
   <script>
-    // Global variables to store state
+    let html5QrCode;          // Instance of the scanner
     let scanning = false;
     let lastScannedItem = "";
     let lastScannedSerial = "";
     let activeStreamTrack = null;
 
-    // Start the scanner using QuaggaJS with enhanced configuration
-    function startScanner() {
+    const startButton = document.getElementById("start-scan");
+    const stopButton = document.getElementById("stop-scan");
+
+    // Start the scanner using html5-qrcode
+    startButton.addEventListener("click", () => {
       if (scanning) return;
       scanning = true;
-      document.getElementById("start-scan").disabled = true;
-      document.getElementById("stop-scan").disabled = false;
+      startButton.disabled = true;
+      stopButton.disabled = false;
 
-      Quagga.init({
-        inputStream: {
-          name: "Live",
-          type: "LiveStream",
-          target: document.querySelector("#interactive"),
-          constraints: {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          // Limit the detection region to improve accuracy.
-          area: { top: "25%", right: "10%", left: "10%", bottom: "25%" }
+      // Create a new instance of the scanner, using the "reader" div
+      html5QrCode = new Html5Qrcode("reader");
+      // Configuration for the scanner
+      const config = { fps: 10, qrbox: 250 }; // Adjust fps and scanning box size as needed.
+
+      // Start scanning using the environment (back) camera
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText, decodedResult) => {
+          // Process decoded text.
+          // For this example, we assume the first detected code is the "Item" barcode
+          // and the second (if different) is the "Serial" barcode.
+          if (!lastScannedItem) {
+            lastScannedItem = decodedText;
+            alert("Item Barcode detected: " + decodedText);
+          } else if (!lastScannedSerial && decodedText !== lastScannedItem) {
+            lastScannedSerial = decodedText;
+            alert("Serial Barcode detected: " + decodedText);
+            // Once both are detected, record the data.
+            recordData(lastScannedItem, lastScannedSerial);
+            // Reset the stored values for the next scan.
+            lastScannedItem = "";
+            lastScannedSerial = "";
+          }
         },
-        decoder: {
-          readers: [
-            "code_128_reader",
-            "ean_reader",
-            "ean_8_reader",
-            "upc_reader",
-            "upc_e_reader",
-            "code_39_reader",
-            "code_39_vin_reader",
-            "codabar_reader",
-            "i2of5_reader",
-            "2of5_reader",
-            "code_93_reader"
-          ]
-        },
-        locate: true,
-        numOfWorkers: navigator.hardwareConcurrency || 4,
-        frequency: 10
-      }, function (err) {
-        if (err) {
-          console.error(err);
-          return;
+        (errorMessage) => {
+          // Optional error callback.
+          console.log("Scan error:", errorMessage);
         }
-        console.log("Quagga initialization finished. Ready to start");
-        Quagga.start();
-
-        // Try to get the active video track for advanced controls.
-        const track = Quagga.CameraAccess.getActiveTrack();
-        if (track) {
-          activeStreamTrack = track;
-          // Optionally, set the initial zoom to 1 if supported.
-          const capabilities = activeStreamTrack.getCapabilities();
-          if (capabilities.zoom) {
-            // Update the zoom slider attributes based on the camera's capabilities.
-            document.getElementById("zoom").min = capabilities.zoom.min;
-            document.getElementById("zoom").max = capabilities.zoom.max;
-            document.getElementById("zoom").step = capabilities.zoom.step || 0.1;
-            document.getElementById("zoom").value = capabilities.zoom.min;
+      )
+      .then(() => {
+        // Once scanning has started, attempt to retrieve the underlying video track.
+        const videoElem = document.querySelector("#reader video");
+        if (videoElem && videoElem.srcObject) {
+          const tracks = videoElem.srcObject.getVideoTracks();
+          if (tracks && tracks.length > 0) {
+            activeStreamTrack = tracks[0];
           }
         }
+      })
+      .catch((err) => {
+        console.error("Unable to start scanning.", err);
       });
-
-      // Process detected barcodes
-      Quagga.onDetected(onBarcodeDetected);
-    }
-
-    // Handle a detected barcode
-    function onBarcodeDetected(result) {
-      const code = result.codeResult.code;
-      console.log("Detected barcode:", code);
-
-      // For demonstration:
-      // - The first detected barcode is assumed to be the Item barcode.
-      // - The second detected (and different) barcode is the Serial barcode.
-      if (!lastScannedItem) {
-        lastScannedItem = code;
-        alert("Item Barcode detected: " + code);
-      } else if (!lastScannedSerial && code !== lastScannedItem) {
-        lastScannedSerial = code;
-        alert("Serial Barcode detected: " + code);
-        // Once both barcodes are scanned, send the record.
-        recordData(lastScannedItem, lastScannedSerial);
-        // Reset for next scan session.
-        lastScannedItem = "";
-        lastScannedSerial = "";
-      }
-    }
+    });
 
     // Stop the scanner
-    function stopScanner() {
+    stopButton.addEventListener("click", () => {
       if (!scanning) return;
       scanning = false;
-      document.getElementById("start-scan").disabled = false;
-      document.getElementById("stop-scan").disabled = true;
-      Quagga.stop();
-    }
+      startButton.disabled = false;
+      stopButton.disabled = true;
+      html5QrCode.stop().then(() => {
+        console.log("Scanner stopped.");
+      }).catch((err) => {
+        console.error("Error stopping scanner.", err);
+      });
+    });
 
-    // Adjust brightness by modifying the CSS filter on the video element.
+    // Adjust brightness by applying a CSS filter to the video element inside #reader.
     document.getElementById("brightness").addEventListener("input", function () {
       const brightnessValue = this.value;
-      const videoElem = document.querySelector("#interactive video");
+      const videoElem = document.querySelector("#reader video");
       if (videoElem) {
         videoElem.style.filter = `brightness(${brightnessValue})`;
       }
     });
 
-    // Attempt to adjust focus using media track constraints (may not be supported on many devices).
+    // Attempt to adjust focus using media track constraints.
     document.getElementById("focus").addEventListener("input", function () {
       const focusValue = parseInt(this.value);
       if (activeStreamTrack) {
@@ -211,7 +182,7 @@
       }
     });
 
-    // Attempt to adjust zoom using media track constraints (if supported).
+    // Attempt to adjust zoom using media track constraints.
     document.getElementById("zoom").addEventListener("input", function () {
       const zoomValue = parseFloat(this.value);
       if (activeStreamTrack) {
@@ -250,20 +221,16 @@
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' }
       })
-        .then(response => response.json())
-        .then(responseJson => {
-          alert("Data recorded successfully!");
-          console.log("Response from server:", responseJson);
-        })
-        .catch(error => {
-          console.error("Error recording data:", error.message);
-          alert("Error recording data.");
-        });
+      .then(response => response.json())
+      .then(responseJson => {
+        alert("Data recorded successfully!");
+        console.log("Response from server:", responseJson);
+      })
+      .catch(error => {
+        console.error("Error recording data:", error);
+        alert("Error recording data.");
+      });
     }
-
-    // Button event listeners
-    document.getElementById("start-scan").addEventListener("click", startScanner);
-    document.getElementById("stop-scan").addEventListener("click", stopScanner);
   </script>
 </body>
 </html>
