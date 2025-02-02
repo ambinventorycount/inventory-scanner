@@ -3,319 +3,161 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Professional Barcode Scanner</title>
+  <title>Barcode Scanner</title>
+  <!-- Include html5-qrcode library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ua-parser-js@1.0.2/src/ua-parser.min.js"></script>
   <style>
-    :root {
-      --primary-color: #2c3e50;
-      --secondary-color: #3498db;
-      --success-color: #27ae60;
-      --danger-color: #e74c3c;
-      --text-color: #34495e;
-    }
-
     body {
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      margin: 0;
-      padding: 20px;
-      background: #f8f9fa;
-      color: var(--text-color);
-    }
-
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-    }
-
-    .header {
+      font-family: Arial, sans-serif;
       text-align: center;
-      margin-bottom: 2rem;
-      padding: 1.5rem;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+      padding: 20px;
     }
-
     #reader {
-      width: 100%;
-      max-width: 600px;
-      margin: 1rem auto;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      width: 300px;
+      margin: auto;
     }
-
-    .input-group {
-      margin: 1.5rem 0;
-      background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    input {
+      width: 90%;
+      padding: 8px;
+      margin: 10px;
     }
-
-    .input-field {
-      position: relative;
-      margin: 1rem 0;
-    }
-
-    .input-field label {
-      display: block;
-      margin-bottom: 0.5rem;
-      font-weight: 500;
-      color: var(--primary-color);
-    }
-
-    .input-field input {
-      width: 100%;
-      padding: 0.8rem;
-      border: 2px solid #e0e0e0;
-      border-radius: 6px;
-      font-size: 1rem;
-      transition: border-color 0.3s ease;
-    }
-
-    .input-field input:focus {
-      outline: none;
-      border-color: var(--secondary-color);
-      box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-    }
-
-    .input-field input.highlight {
-      border-color: var(--success-color);
-      background: #f8fff9;
-    }
-
-    .button-group {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 1rem;
-      margin: 2rem 0;
-    }
-
     button {
-      padding: 0.8rem 1.2rem;
-      border: none;
-      border-radius: 6px;
-      background: var(--secondary-color);
-      color: white;
-      font-weight: 600;
+      padding: 10px 15px;
+      margin: 10px;
       cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
     }
-
-    button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 3px 8px rgba(0,0,0,0.1);
-    }
-
-    button:active {
-      transform: translateY(0);
-    }
-
-    button.secondary {
-      background: var(--primary-color);
-    }
-
-    button.success {
-      background: var(--success-color);
-    }
-
-    button.danger {
-      background: var(--danger-color);
-    }
-
-    #statusBar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: var(--primary-color);
-      color: white;
-      padding: 0.8rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.9rem;
-    }
-
-    .status-item {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .status-item i {
-      font-size: 1.2rem;
-    }
-
-    .device-info {
-      background: white;
-      padding: 1rem;
-      border-radius: 8px;
-      margin: 1rem 0;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-    }
-
-    @media (max-width: 600px) {
-      .container {
-        padding: 10px;
-      }
-      
-      .header {
-        padding: 1rem;
-      }
-      
-      .button-group {
-        grid-template-columns: 1fr;
-      }
+    .controls {
+      margin-top: 20px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>Professional Barcode Scanner</h1>
-      <div class="device-info" id="deviceInfo">
-        Detecting device...
-      </div>
-    </div>
-
-    <div id="reader"></div>
-
-    <div class="input-group">
-      <div class="input-field">
-        <label for="itemBarcode">Item Barcode</label>
-        <input type="text" id="itemBarcode" class="highlight">
-      </div>
-      <div class="input-field">
-        <label for="serialBarcode">Serial Barcode</label>
-        <input type="text" id="serialBarcode">
-      </div>
-    </div>
-
-    <div class="button-group">
-      <button onclick="toggleScanner()" class="secondary">
-        <i class="fas fa-camera"></i>
-        <span id="scanButtonText">Start Scan</span>
-      </button>
-      <button onclick="saveToGoogleSheets()" class="success" id="saveButton">
-        <i class="fas fa-save"></i>
-        Save
-      </button>
-      <button id="toggleTorch" class="secondary">
-        <i class="fas fa-lightbulb"></i>
-        Torch
-      </button>
-    </div>
-
-    <div class="controls">
-      <label for="focusRange">Focus Control</label>
-      <input type="range" id="focusRange" min="0" max="10" step="0.1" value="0" class="slider">
-    </div>
+  <h2>Scan Item & Serial Barcodes</h2>
+  
+  <!-- Barcode Scanner -->
+  <div id="reader"></div>
+  
+  <!-- Input Fields -->
+  <input type="text" id="itemBarcode" placeholder="Item Barcode">
+  <input type="text" id="serialBarcode" placeholder="Serial Barcode">
+  
+  <!-- Control Buttons -->
+  <button onclick="startScanner()">Start Scanning</button>
+  <button onclick="stopScanner()">Stop Scanner</button>
+  <button onclick="saveToGoogleSheets()">Save Record</button>
+  
+  <div class="controls">
+        <br>
+    <label for="zoomRange">Adjust Zoom:</label>
+    <input type="range" id="zoomRange" min="1" max="10" step="0.1" value="5">
   </div>
-
-  <div id="statusBar">
-    <div class="status-item">
-      <i class="fas fa-mobile-alt"></i>
-      <span id="deviceModel"></span>
-    </div>
-    <div class="status-item">
-      <i class="fas fa-info-circle"></i>
-      <span id="systemStatus">Ready</span>
-    </div>
-  </div>
-
-  <!-- Font Awesome for icons -->
-  <script src="https://kit.fontawesome.com/your-kit-code.js" crossorigin="anonymous"></script>
-
+  
   <script>
-    // Device detection
-    const parser = new UAParser();
-    const deviceInfo = parser.getResult();
-    const deviceModel = deviceInfo.device.model || deviceInfo.os.name;
-    document.getElementById('deviceModel').textContent = deviceModel;
-    document.getElementById('deviceInfo').innerHTML = `
-      <strong>Device:</strong> ${deviceModel}<br>
-      <strong>Browser:</strong> ${deviceInfo.browser.name} ${deviceInfo.browser.version}<br>
-      <strong>OS:</strong> ${deviceInfo.os.name} ${deviceInfo.os.version}
-    `;
+    let scanner;
+    let scanningItem = true; // Track which barcode is being scanned (first: item, then serial)
 
-    // Rest of the scanner code from previous version with UI updates
-    let scanner = null;
-    let scanningItem = true;
-    let isScanning = false;
-
-    async function toggleScanner() {
-      if (isScanning) {
-        await stopScanner();
-      } else {
-        await startScanner();
-      }
-      updateUI();
+    // Start the barcode scanner
+    function startScanner() {
+      // Create a new instance of the scanner using the reader div
+      scanner = new Html5Qrcode("reader");
+      scanner.start(
+        { facingMode: "environment" }, // Use rear camera
+        { 
+          fps: 10, 
+          qrbox: { width: 400, height: 300 },
+          showTorchButtonIfSupported: true,
+          showZoomSliderIfSupported: true,
+defaultZoomValueIfSupported: 4
+        },
+        (decodedText) => {
+          // When a barcode is decoded, populate the appropriate input field.
+          if (scanningItem) {
+            document.getElementById("itemBarcode").value = decodedText;
+            scanningItem = false;
+          } else {
+            document.getElementById("serialBarcode").value = decodedText;
+            // Stop scanning after the serial barcode is captured.
+            stopScanner();
+            // Reset for the next scan session if desired:
+            scanningItem = true;
+          }
+        },
+        (errorMessage) => {
+          console.warn("Scan error:", errorMessage);
+        }
+      ).then(() => {
+        console.log("Scanner started successfully.");
+      }).catch((err) => {
+        console.error("Unable to start scanning.", err);
+      });
     }
 
-    async function startScanner() {
+    // Stop the scanner
+    function stopScanner() {
+      if (scanner) {
+        scanner.stop().then(() => {
+          console.log("Scanner stopped.");
+        }).catch((err) => {
+          console.error("Error stopping scanner:", err);
+        });
+      }
+    }
+
+
+
+    // Zoom adjustment control
+    document.getElementById("zoomRange").addEventListener("input", (e) => {
+      const track = getVideoTrack();
+      if (track) {
+        const capabilities = track.getCapabilities();
+        if (capabilities.zoom) {
+          track.applyConstraints({ advanced: [{ zoom: parseFloat(e.target.value) }] })
+            .then(() => console.log("Zoom adjusted"))
+            .catch(err => console.error("Zoom adjustment error:", err));
+        } else {
+          console.log("Zoom adjustment not supported.");
+        }
+      }
+    });
+
+    // Helper function to retrieve the video track from the scanner's video element
+    function getVideoTrack() {
+      const videoElem = document.querySelector("#reader video");
+      if (videoElem && videoElem.srcObject) {
+        const tracks = videoElem.srcObject.getVideoTracks();
+        if (tracks && tracks.length > 0) {
+          return tracks[0];
+        }
+      }
+      return null;
+    }
+
+    // Save the scanned/entered data to Google Sheets using a Google Apps Script endpoint
+    async function saveToGoogleSheets() {
+      const itemBarcode = document.getElementById("itemBarcode").value;
+      const serialBarcode = document.getElementById("serialBarcode").value;
+      if (!itemBarcode || !serialBarcode) {
+        alert("Please scan or enter both barcodes!");
+        return;
+      }
+      const scriptURL = "https://script.google.com/macros/s/AKfycbwXB6XxWn0GVMSEXr6PlTrwXFMGG29RCwBm0sjAkTa4/dev";
+      const data = { item: itemBarcode, serial: serialBarcode };
       try {
-        if (scanner) await scanner.stop();
-        
-        scanner = new Html5Qrcode("reader");
-        await scanner.start(
-          { facingMode: "environment" },
-          { 
-            fps: 10, 
-            qrbox: { width: 250, height: 250 },
-            focusMode: "manual"
-          },
-          handleScanResult,
-          () => {}
-        );
-        
-        isScanning = true;
-        updateStatus('Scanning...', '#27ae60');
-        setupCameraControls();
-      } catch (err) {
-        console.error("Scanner error:", err);
-        updateStatus('Camera access denied', '#e74c3c');
-        isScanning = false;
-      }
-      updateUI();
-    }
-
-    function handleScanResult(decodedText) {
-      const inputField = scanningItem ? 
-        document.getElementById("itemBarcode") : 
-        document.getElementById("serialBarcode");
-
-      inputField.value = decodedText;
-      inputField.classList.add('highlight');
-      
-      if (scanningItem) {
-        document.getElementById("serialBarcode").classList.remove('highlight');
-        scanningItem = false;
-        updateStatus('Scan serial barcode', '#3498db');
-      } else {
-        scanningItem = true;
-        stopScanner();
-        updateStatus('Ready to save', '#27ae60');
+        const response = await fetch(scriptURL, {
+          method: "POST",
+          body: JSON.stringify(data),
+          headers: { "Content-Type": "application/json" }
+        });
+        if (response.ok) {
+          alert("Data saved successfully!");
+        } else {
+          alert("Error saving data!");
+        }
+      } catch (error) {
+        console.error("Error saving data:", error);
+        alert("Error saving data!");
       }
     }
-
-    function updateStatus(text, color) {
-      const statusElement = document.getElementById('systemStatus');
-      statusElement.textContent = text;
-      statusElement.style.color = color;
-    }
-
-    // Add remaining functions from previous version (stopScanner, saveToGoogleSheets, etc.)
-    // with appropriate status updates and UI enhancements
-
-    // Initialize UI
-    updateUI();
   </script>
 </body>
 </html>
