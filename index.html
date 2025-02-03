@@ -69,7 +69,10 @@
       <div id="cameraInfo"></div>
       <button onclick="clearFields()">Clear Fields</button>
  <button id="toggleManual" onclick="toggleManualEntry()">Enable Manual Entry</button>
-      <button onclick="saveToGoogleSheets()">Save Record !</button>
+
+<button id="saveButton" onclick="saveToGoogleSheets()">Save Record !</button>
+
+
       <!-- Display the counter for successful saves -->
       <div id="saveCounterDisplay">Submitted Count: <span id="saveCounter">0</span></div>
     </div>
@@ -221,16 +224,25 @@
     window.addEventListener("beforeunload", stopScanner);
 
     async function saveToGoogleSheets() {
-      let item = document.getElementById('itemBarcode').value;
+
+  // Get the save button element and disable it
+  
+ 
+   const saveButton = document.getElementById('saveButton');
+ saveButton.disabled = true;
+     
+let item = document.getElementById('itemBarcode').value;
       let serial = document.getElementById('serialBarcode').value;
       const quantity = document.getElementById('Quantity').value;
-      
+   
       if (!item || !serial) {
           alert('Please fill in both barcode fields.');
+saveButton.disabled = false;
           return;
       }
       if (!quantity) {
           alert('Please fill in Quantity field.');
+saveButton.disabled = false;
           return;
       }
 
@@ -240,8 +252,10 @@
       if (!serial.startsWith("'")) {
           serial = "'" + serial;
       }
+
+
       const scriptURL = 'https://script.google.com/macros/s/AKfycbz8qycRr2cGi2UA58aWZ8TsUxilKmzwQaL8qDqwsCOFgX6qhBgUreoiYHkY6GC4vQvvVQ/exec';
-      
+     
       try {
           await fetch(scriptURL, {
               method: 'POST',
@@ -249,6 +263,8 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ item, serial, quantity, timestamp: new Date().toISOString() })
           });
+
+
           alert('Data saved!');
           // Increment the counter and update display
           successfulSaveCount++;
@@ -258,7 +274,10 @@
       } catch (error) {
           console.error('Error:', error);
           alert('Save failed. Check console.');
-      }
+      }finally {
+    // Re-enable the save button regardless of outcome
+    saveButton.disabled = false;
+  }
     }
 
     // Toggle function to enable or disable manual entry of the barcode fields.
