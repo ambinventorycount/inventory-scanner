@@ -66,22 +66,15 @@
           const aspectRatio = width / height
 	  const reverseAspectRatio = height / width
 
-const mobileAspectRatio = reverseAspectRatio > 1.5
-            ? reverseAspectRatio + (reverseAspectRatio * 12 / 100)
-            : reverseAspectRatio 
-
-
-
-
 const config = {
             fps: 25, // frame per seconds for qr code scanning
             qrbox: { width: qrBoxSize, height: qrBoxSize },
-            videoConstraints: {
-              facingMode: 'environment',
-              aspectRatio: width < 600
-                ? mobileAspectRatio
-                : aspectRatio,
-            },}
+                     disableFlip: false,
+          focusMode: "continuous",
+          advanced: [{ zoom: 2.0 }],
+          rememberLastUsedCamera: true,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true}
 
 
 
