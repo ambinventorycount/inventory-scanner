@@ -36,49 +36,66 @@
       margin-top: 10px;
       color: #666;
     }
+    .scan-section {
+      margin: 15px 0;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
-  <h1>Barcode Scanner with Zoom</h1>
-  
+  <h1>Barcode with Zoom</h1>
+
   <div class="controls">
+
     <div class="zoom-controls">
       <label>Zoom: <span id="zoomValue">1</span>x</label>
       <input type="range" id="zoomRange" min="1" max="20" step="0.1" value="1" disabled>
       <div id="cameraInfo"></div>
+<button onclick="clearFields()">Clear Fields</button>
     </div>
-    
-    <div>
-      <button onclick="toggleScanner()">Start Scanner</button>
-      <button onclick="clearFields()">Clear Fields</button>
-    </div>
+ </div>
+
+ 
+
+  <div class="scan-section">
+
+    <button onclick="startItemScan()">Scan Item</button>
+    <input type="text" id="itemBarcode" placeholder="Item Barcode" readonly>
   </div>
 
-  <div id="reader"></div>
-  
-  <div class="results">
-    <input type="text" id="itemBarcode" placeholder="Item Barcode" readonly>
+  <div class="scan-section">
+    <button onclick="startSerialScan()">Scan Serial</button>
     <input type="text" id="serialBarcode" placeholder="Serial Barcode" readonly>
   </div>
+
+
+ <div id="reader"></div>
 
   <script>
     let scanner = null;
     let currentZoom = 1;
     let videoTrack = null;
-    let scanningItem = true;
+    let currentTarget = null;
 
-    async function toggleScanner() {
-      if (scanner) {
-        await stopScanner();
-      } else {
-        await startScanner();
-      }
+    async function startItemScan() {
+      currentTarget = 'itemBarcode';
+      await startScanner();
+    }
+
+    async function startSerialScan() {
+      currentTarget = 'serialBarcode';
+      await startScanner();
     }
 
     async function startScanner() {
       try {
-        scanner = new Html5Qrcode("reader");
+        if (scanner) {
+          await stopScanner();
+        }
         
+        scanner = new Html5Qrcode("reader");
         const config = {
           fps: 10,
           qrbox: 250,
@@ -96,7 +113,6 @@
         
         setupZoomControls();
         updateCameraInfo();
-        document.querySelector("button").textContent = "Stop Scanner";
       } catch (error) {
         console.error("Scanner error:", error);
         alert("Failed to start scanner: " + error.message);
@@ -108,9 +124,8 @@
         await scanner.stop();
         scanner = null;
         videoTrack = null;
-        document.querySelector("button").textContent = "Start Scanner";
-        document.getElementById("cameraInfo").textContent = "";
         document.getElementById("zoomRange").disabled = true;
+        document.getElementById("cameraInfo").textContent = "";
       }
     }
 
@@ -153,14 +168,9 @@
     }
 
     function handleScanResult(decodedText) {
-      const targetField = scanningItem ? "itemBarcode" : "serialBarcode";
-      document.getElementById(targetField).value = decodedText;
-      
-      if (scanningItem) {
-        scanningItem = false;
-      } else {
+      if (currentTarget) {
+        document.getElementById(currentTarget).value = decodedText;
         stopScanner();
-        scanningItem = true;
       }
     }
 
@@ -180,10 +190,9 @@
     function clearFields() {
       document.getElementById("itemBarcode").value = "";
       document.getElementById("serialBarcode").value = "";
-      scanningItem = true;
+      currentTarget = null;
     }
 
-    // Cleanup when leaving page
     window.addEventListener("beforeunload", stopScanner);
   </script>
 </body>
