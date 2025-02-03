@@ -59,6 +59,8 @@
       <button onclick="clearFields()">Clear Fields</button>
       <button id="toggleManual" onclick="toggleManualEntry()">Enable Manual Entry</button>
       <button onclick="saveToGoogleSheets()">Save !!!</button>
+<!-- Display the counter for successful saves -->
+      <div id="saveCounterDisplay">Submitted Count: <span id="saveCounter">0</span></div>
   </div>
     </div>
   </div>
@@ -235,7 +237,10 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ item, serial, quantity, timestamp: new Date().toISOString() })
           });
-          alert('Data saved!');
+           alert('Data saved!');
+          // Increment the counter and update display
+          successfulSaveCount++;
+          document.getElementById("saveCounter").textContent = successfulSaveCount;
           // Clear only the serial field (or adjust as needed)
           document.getElementById('serialBarcode').value = '';
       } catch (error) {
