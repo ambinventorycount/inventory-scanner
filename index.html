@@ -4,123 +4,178 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barcode Scanner</title>
+  <!-- Include html5-qrcode library -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
-    /* ... (keep your existing styles the same) ... */
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #reader {
+      width: 300px;
+      margin: auto;
+    }
+    input {
+      width: 90%;
+      padding: 8px;
+      margin: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      margin: 10px;
+      cursor: pointer;
+    }
+    .controls {
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
-  <h2>Scan Item & Serial Barcodes 5.2 19</h2>
+  <h2>Scan Item & Serial Barcodes 5.2 12 </h2>
   <div class="controls">
     <br>
     <label for="zoomRange">Adjust Zoom:</label>
     <input type="range" id="zoomRange" min="1" max="20" step="0.1" value="5">
   </div>
 
+  <!-- Barcode Scanner -->
   <div id="reader"></div>
+  <!-- Input Fields -->
   <input type="text" id="itemBarcode" placeholder="Item Barcode">
   <input type="text" id="serialBarcode" placeholder="Serial Barcode">
-  
+  <!-- Control Buttons -->
+ 
   <button onclick="startScanner()">Start Scanner</button>
   <button onclick="stopScanner()">Stop Scanner</button>
-  <button onclick="saveToGoogleSheets()">Save Record</button>
+ <button onclick="saveToGoogleSheets()">Save Record</button>
 
   <script>
     let scanner;
-    let scanningItem = true;
+    let scanningItem = true; // Track which barcode is being scanned (first: item, then serial)
 
-    async function startScanner() {
-
+    // Start the barcode scanner
+    function startScanner() {
+      // Create a new instance of the scanner using the reader div
       scanner = new Html5Qrcode("reader");
-      
-      const config = {
-        fps: 30,
-        qrbox: { width: 300, height: 250 },
-        videoConstraints: {
-          facingMode: 'environment',
-          focusMode: 'continuous',
-        useBarCodeDetectorIfSupported: true,
-        rememberLastUsedCamera: true,
-        aspectRatio: 4/3,
-        showTorchButtonIfSupported: true,
-        showZoomSliderIfSupported: true,
-        defaultZoomValueIfSupported: 2
-        }
-      };
+     
+ const camera = { facingMode: 'environment' }
+          const qrBoxSize = 300
+          const width = window.innerWidth
+          const height = window.innerHeight
+          const aspectRatio = width / height
+	  const reverseAspectRatio = height / width
 
-      try {
-        await scanner.start(
-          { facingMode: "environment" },
-          config,
-          (decodedText) => {
-            if (scanningItem) {
-              document.getElementById("itemBarcode").value = decodedText;
-              scanningItem = false;
-            } else {
-              document.getElementById("serialBarcode").value = decodedText;
-              stopScanner();
-              scanningItem = true;
-            }
+const mobileAspectRatio = reverseAspectRatio > 1.5
+            ? reverseAspectRatio + (reverseAspectRatio * 12 / 100)
+            : reverseAspectRatio 
+
+
+
+
+const config = {
+            fps: 25, // frame per seconds for qr code scanning
+            qrbox: { width: qrBoxSize, height: qrBoxSize },
+            videoConstraints: {
+              facingMode: 'environment',
+              aspectRatio: width < 600
+                ? mobileAspectRatio
+                : aspectRatio,
+            },}
+
+
+
+ scanner.start(
+        camera, // Use rear camera
+config,        
+
+        (decodedText) => {
+          // When a barcode is decoded, populate the appropriate input field.
+          if (scanningItem) {
+            document.getElementById("itemBarcode").value = decodedText;
+            scanningItem = false;
+          } else {
+            document.getElementById("serialBarcode").value = decodedText;
+            // Stop scanning after the serial barcode is captured.
+            stopScanner();
+            // Reset for the next scan session if desired:
+            scanningItem = true;
           }
-        );
-        console.log("Scanner started");
-        setupZoomControl();
-      } catch (err) {
-        console.error("Scanner start failed:", err);
-      }
-    }
-
-    function stopScanner() {
-      if (scanner) {
-        scanner.stop().then(() => {
-          console.log("Scanner stopped");
-        }).catch(console.error);
-      }
-    }
-
-    function setupZoomControl() {
-      const zoomRange = document.getElementById("zoomRange");
-      zoomRange.addEventListener("input", (e) => {
-        const video = document.querySelector("#reader video");
-        if (!video) return;
-        
-        const track = video.srcObject.getVideoTracks()[0];
-        if (track && typeof track.getCapabilities === 'function') {
-          const capabilities = track.getCapabilities();
-          if (capabilities.zoom) {
-            const zoom = parseFloat(e.target.value);
-            track.applyConstraints({ advanced: [{ zoom }] })
-              .catch(err => console.error("Zoom error:", err));
-          }
+        },
+        (errorMessage) => {
+          console.warn("Scan error:", errorMessage);
         }
+      ).then(() => {
+        console.log("Scanner started successfully.");
+      }).catch((err) => {
+        console.error("Unable to start scanning.", err);
       });
     }
 
+    // Stop the scanner
+    function stopScanner() {
+      if (scanner) {
+        scanner.stop().then(() => {
+          console.log("Scanner stopped.");
+        }).catch((err) => {
+          console.error("Error stopping scanner:", err);
+        });
+      }
+    }
+
+    // Zoom adjustment control
+    document.getElementById("zoomRange").addEventListener("input", (e) => {
+      const track = getVideoTrack();
+      if (track) {
+        const capabilities = track.getCapabilities();
+        if (capabilities.zoom) {
+          track.applyConstraints({ advanced: [{ zoom: parseFloat(e.target.value) }] })
+            .then(() => console.log("Zoom adjusted"))
+            .catch(err => console.error("Zoom adjustment error:", err));
+        } else {
+          console.log("Zoom adjustment not supported.");
+        }
+      }
+    });
+
+    // Helper function to retrieve the video track from the scanner's video element
+    function getVideoTrack() {
+      const videoElem = document.querySelector("#reader video");
+      if (videoElem && videoElem.srcObject) {
+        const tracks = videoElem.srcObject.getVideoTracks();
+        if (tracks && tracks.length > 0) {
+          return tracks[0];
+        }
+      }
+      return null;
+    }
+
+    // Save the scanned/entered data to Google Sheets using a Google Apps Script endpoint
     async function saveToGoogleSheets() {
       const item = document.getElementById("itemBarcode").value;
       const serial = document.getElementById("serialBarcode").value;
       
-      if (!item || !serial) {
-        alert("Please scan both barcodes!");
+      if (!itemBarcode || !serialBarcode) {
+        alert("Please scan or enter both barcodes!");
         return;
       }
 
-      const scriptURL = 'https://script.google.com/macros/s/AKfycbyhMRU0DcDquqbamt5vSRBheJDIzEFcGnwgVZJ7H7fH4DbjJgFllr59xXjAWVElzpqKPg/exec';
-      
-      try {
-        await fetch(scriptURL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ item, serial, timestamp: new Date().toISOString() })
-        });
-        alert('Data saved!');
-        document.getElementById('serialBarcode').value = '';
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Save failed. Check console.');
-      }
-    }
-  </script>
+ const scriptURL = 'https://script.google.com/macros/s/AKfycbyhMRU0DcDquqbamt5vSRBheJDIzEFcGnwgVZJ7H7fH4DbjJgFllr59xXjAWVElzpqKPg/exec';
+            
+            try {
+                await fetch(scriptURL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item, serial, timestamp: new Date().toISOString() })
+                });
+                alert('Data saved!');
+                //document.getElementById('itemBarcode').value = '';
+                document.getElementById('serialBarcode').value = '';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Save failed. Check console.');
+            }
+        }  </script>
 </body>
 </html>
