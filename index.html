@@ -61,7 +61,7 @@
      
  const camera = { facingMode: 'environment' }
           const qrBoxSize = 300
-          const width = window.innerWidth
+          const width = 9999 //window.innerWidth
           const height = window.innerHeight
           const aspectRatio = width / height
 	  const reverseAspectRatio = height / width
@@ -70,11 +70,13 @@ const mobileAspectRatio = reverseAspectRatio > 1.5
             ? reverseAspectRatio + (reverseAspectRatio * 12 / 100)
             : reverseAspectRatio 
 
-
+ await sleep(2250); // Or use whatever function for the timeout
+    const scannerCapabilities = scanner.value.getRunningTrackCapabilities();
+    const zoomCapability = scannerCapabilities.zoom > 2 ? 2.0 : scannerCapabilities.zoom;
 
 
 const config = {
-            fps: 20, // frame per seconds for qr code scanning
+            fps: 30, // frame per seconds for qr code scanning
             qrbox: { width: qrBoxSize, height: qrBoxSize },
             videoConstraints: {
 		showZoomSliderIfSupported: true,
@@ -84,7 +86,19 @@ focusMode: "continuous",
               rememberLastUsedCamera: true,
               useBarCodeDetectorIfSupported: true,
 
-          advanced: [{ zoom: 2.0 }],
+         // advanced: [{ zoom: 2.0 }],
+
+advanced: [
+            // conditionally add the zoom capability if it is supported
+            ...(scannerCapabilities.zoom ? [{ zoom: zoomCapability }] : []),
+
+            // conditionally add the focus distance capability if it is supported
+            ...(scannerCapabilities.focusDistance ? [{ focusDistance: 1 }] : []),
+        
+
+
+
+
 focusDistance : [{ focusDistance: 1 }],
               facingMode: 'environment',
               aspectRatio: width < 600
