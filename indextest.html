@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode Scanner with Zoom, Manual Entry Toggle, and Save Counter</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    #reader {
+      width: 100%;
+      max-width: 600px;
+      margin: 20px auto;
+      position: relative;
+    }
+    .controls {
+      margin: 10px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-weight: bold;
+    }
+    .zoom-controls {
+      background: #f5f5f5;
+      padding: 1px;
+      border-radius: 5px;
+    }
+    input[type="range"] {
+      width: 200px;
+    }
+    #cameraInfo {
+      margin-top: 10px;
+      color: #666;
+    }
+    .scan-section {
+      margin: 10px 0;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-weight: bold;
+    }
+    .barcode-input {
+      font-size: 20px;
+      padding: 5px;
+    }
+    button {
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    #saveCounterDisplay {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    /* Hide manual entry toggle for non-logged-in users */
+    #mainContent {
+      display: none;
+    }
+    /* Login overlay styles */
+    #loginOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #loginBox {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    #loginBox input {
+      margin: 10px 0;
+      padding: 8px;
+      width: 80%;
+      font-size: 16px;
+    }
+    #loginBox button {
+      padding: 8px 12px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Login Overlay -->
+  <div id="loginOverlay">
+    <div id="loginBox">
+      Ambient Barcode Inventory Count v6.5<br><br>
+      <input type="text" id="username" placeholder="Username">
+      <br>
+      <input type="password" id="password" placeholder="Password">
+      <br>
+      <button onclick="login()">Log In</button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="mainContent">
+    <div class="controls">
+      Ambient Barcode Inventory Count v6.5
+      <div class="zoom-controls">
+        <label>Zoom: <span id="zoomValue">1</span>x</label>
+        <input type="range" id="zoomRange" min="1" max="20" step="0.1" value="1" disabled>
+        <div id="cameraInfo"></div>
+        <button onclick="clearFields()">Clear Fields</button>
+        <button id="toggleManual" onclick="toggleManualEntry()">Enable Manual Entry</button>
+        <button id="saveButton" onclick="saveToGoogleSheets()">Save Record !</button>
+        <div id="saveCounterDisplay">Submitted Count: <span id="saveCounter">0</span></div>
+      </div>
+    </div>
+
+    <div class="scan-section">
+      <label for="Quantity">Quantity:</label>
+      <input type="number" id="Quantity" value="1">
+    </div>
+
+    <div class="scan-section">
+      <button onclick="startItemScan()">Item</button>
+      <input type="text" id="itemBarcode" placeholder="Item Barcode" readonly class="barcode-input">
+    </div>
+
+    <div class="scan-section">
+      <button onclick="startSerialScan()">Serial</button>
+      <input type="text" id="serialBarcode" placeholder="Serial Barcode" readonly class="barcode-input">
+    </div>
+
+    <div id="reader"></div>
+  </div>
+
+  <script>
+    // Global variables
+    let scanner = null;
+    let currentZoom = 1;
+    let videoTrack = null;
+    let currentTarget = null;
+    let successfulSaveCount = 0;
+    let authToken = null; // Set upon successful login
+
+    // Replace with your actual deployed Google Apps Script URL
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbxlBLVgDbHZo6p1S5OTC115BhKce_NbUYLm6RT67XOw9Ry2a9hUFLRGbqRrFZ95S2o7/exec';
+
+    /* -------------------- LOGIN FUNCTION -------------------- */
+    async function login() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      if (!username || !password) {
+        alert("Please enter both username and password.");
+        return;
+      }
+      try {
+        const response = await fetch(scriptURL, {
+          method: "POST",
+          // Use text/plain to prevent preflight (simple request)
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          redirect: "follow",
+          body: JSON.stringify({ action: "login", username, password })
+        });
+        const result = await response.json();
+        if (result.success) {
+          authToken = result.token;
+          document.getElementById("loginOverlay").style.display = "none";
+          document.getElementById("mainContent").style.display = "block";
+        } else {
+          alert("Login failed: " + result.message);
+        }
+      } catch (error) {
+        console.error("Login error:", error);
+        alert("Login error. Check console for details.");
+      }
+    }
+
+    /* -------------------- BARCODE SCANNER FUNCTIONS -------------------- */
+    async function startItemScan() {
+      currentTarget = 'itemBarcode';
+      await startScanner();
+    }
+    async function startSerialScan() {
+      currentTarget = 'serialBarcode';
+      await startScanner();
+    }
+    async function startScanner() {
+      try {
+        if (scanner) await stopScanner();
+        scanner = new Html5Qrcode("reader");
+        const config = {
+          fps: 10,
+          qrbox: 250,
+          videoConstraints: { facingMode: "environment", advanced: [{ zoom: currentZoom }] }
+        };
+        await scanner.start({ facingMode: "environment" }, config, handleScanResult);
+        setupZoomControls();
+        updateCameraInfo();
+      } catch (error) {
+        console.error("Scanner error:", error);
+        alert("Failed to start scanner: " + error.message);
+      }
+    }
+    async function stopScanner() {
+      if (scanner) {
+        await scanner.stop();
+        scanner = null;
+        videoTrack = null;
+        document.getElementById("zoomRange").disabled = true;
+        document.getElementById("cameraInfo").textContent = "";
+      }
+    }
+    function setupZoomControls() {
+      const videoElement = document.querySelector("#reader video");
+      if (!videoElement) return;
+      videoTrack = videoElement.srcObject.getVideoTracks()[0];
+      if (!videoTrack) return;
+      const capabilities = videoTrack.getCapabilities();
+      const settings = videoTrack.getSettings();
+      if (capabilities.zoom) {
+        const zoomRange = document.getElementById("zoomRange");
+        zoomRange.min = capabilities.zoom.min;
+        zoomRange.max = capabilities.zoom.max;
+        zoomRange.step = capabilities.zoom.step || 0.1;
+        zoomRange.value = settings.zoom || 1;
+        zoomRange.disabled = false;
+        zoomRange.addEventListener("input", updateZoom);
+        document.getElementById("zoomValue").textContent = zoomRange.value;
+      }
+    }
+    async function updateZoom(event) {
+      if (!videoTrack) return;
+      const newZoom = parseFloat(event.target.value);
+      try {
+        await videoTrack.applyConstraints({ advanced: [{ zoom: newZoom }] });
+        document.getElementById("zoomValue").textContent = newZoom.toFixed(1);
+        currentZoom = newZoom;
+      } catch (error) {
+        console.error("Zoom error:", error);
+      }
+    }
+    function handleScanResult(decodedText) {
+      if (currentTarget) {
+        document.getElementById(currentTarget).value = decodedText;
+        stopScanner();
+      }
+    }
+    function updateCameraInfo() {
+      if (!videoTrack) return;
+      const capabilities = videoTrack.getCapabilities();
+      const settings = videoTrack.getSettings();
+      let info = `Camera: ${settings.label || 'Unknown'}`;
+      if (capabilities.zoom) {
+        info += ` | Zoom: ${capabilities.zoom.min}-${capabilities.zoom.max}x`;
+      }
+      document.getElementById("cameraInfo").textContent = info;
+    }
+    function clearFields() {
+      document.getElementById("itemBarcode").value = "";
+      document.getElementById("serialBarcode").value = "";
+      document.getElementById("Quantity").value = "1";
+      currentTarget = null;
+    }
+    window.addEventListener("beforeunload", stopScanner);
+
+    /* -------------------- SAVE DATA FUNCTION -------------------- */
+    async function saveToGoogleSheets() {
+      const saveButton = document.getElementById('saveButton');
+      saveButton.disabled = true;
+      let item = document.getElementById('itemBarcode').value;
+      let serial = document.getElementById('serialBarcode').value;
+      const quantity = document.getElementById('Quantity').value;
+      if (!item || !serial || !quantity) {
+        alert('Please fill in all required fields.');
+        saveButton.disabled = false;
+        return;
+      }
+      if (!item.startsWith("'")) item = "'" + item;
+      if (!serial.startsWith("'")) serial = "'" + serial;
+      try {
+        const response = await fetch(scriptURL, {
+          method: 'POST',
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          redirect: "follow",
+          body: JSON.stringify({
+            action: "save",
+            token: authToken,
+            item,
+            serial,
+            quantity,
+            timestamp: new Date().toISOString()
+          })
+        });
+        const result = await response.json();
+        if (result.success) {
+          alert('Data saved!');
+          successfulSaveCount++;
+          document.getElementById("saveCounter").textContent = successfulSaveCount;
+          document.getElementById('serialBarcode').value = '';
+        } else {
+          alert('Save failed: ' + result.message);
+        }
+      } catch (error) {
+        console.error('Save error:', error);
+        alert('Save failed. Check console for details.');
+      } finally {
+        saveButton.disabled = false;
+      }
+    }
+
+    /* -------------------- TOGGLE MANUAL ENTRY -------------------- */
+    function toggleManualEntry() {
+      const itemInput = document.getElementById("itemBarcode");
+      const serialInput = document.getElementById("serialBarcode");
+      const toggleButton = document.getElementById("toggleManual");
+      if (itemInput.hasAttribute("readonly")) {
+        itemInput.removeAttribute("readonly");
+        serialInput.removeAttribute("readonly");
+        toggleButton.textContent = "Disable Manual Entry";
+      } else {
+        itemInput.setAttribute("readonly", true);
+        serialInput.setAttribute("readonly", true);
+        toggleButton.textContent = "Enable Manual Entry";
+      }
+    }
+  </script>
+</body>
+</html>
