@@ -59,7 +59,7 @@ Ambient Barcode Inventory Count v5.5
  </div>
 
   <div class="scan-section">
- <label for="Quantity">Quantity:</label><input type="text" id="Quantity"> 
+ <label for="Quantity">Quantity:</label><input type="number" id="Quantity" value="1"> 
 </div>
 
   <div class="scan-section">
@@ -200,15 +200,25 @@ Ambient Barcode Inventory Count v5.5
 
 
 async function saveToGoogleSheets() {
-            const item = document.getElementById('itemBarcode').value;
-            const serial = document.getElementById('serialBarcode').value;
+            let item = document.getElementById('itemBarcode').value;
+            let serial = document.getElementById('serialBarcode').value;
             const quantity = document.getElementById('Quantity').value;
             
             if (!item || !serial) {
                 alert('Please fill in both barcode fields.');
                 return;
             }
+            if (!Quantity) {
+                alert('Please fill in Quantity fields.');
+                return;
+            }
 
+if (!item.startsWith("'")) {
+    item = "'" + item;
+  }
+if (!serial.startsWith("'")) {
+    serial = "'" + serial;
+  }
             const scriptURL = 'https://script.google.com/macros/s/AKfycbz8qycRr2cGi2UA58aWZ8TsUxilKmzwQaL8qDqwsCOFgX6qhBgUreoiYHkY6GC4vQvvVQ/exec';
             
             try {
