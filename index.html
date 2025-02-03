@@ -19,7 +19,7 @@
       position: relative;
     }
     .controls {
-      margin: 20px 0;
+      margin: 10px 0;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -37,7 +37,7 @@
       color: #666;
     }
     .scan-section {
-      margin: 15px 0;
+      margin: 10px 0;
       display: flex;
       gap: 10px;
       align-items: center;
@@ -45,23 +45,25 @@
   </style>
 </head>
 <body>
-  <h1>Barcode with Zoom</h1>
 
   <div class="controls">
-
+Barcode with Zoom v5.5
     <div class="zoom-controls">
       <label>Zoom: <span id="zoomValue">1</span>x</label>
       <input type="range" id="zoomRange" min="1" max="20" step="0.1" value="1" disabled>
       <div id="cameraInfo"></div>
-<button onclick="clearFields()">Clear Fields</button>
+<button onclick="clearFields()">Clear All Fields</button>
+<button onclick="saveToGoogleSheets()">Save !!!</button>
+  
     </div>
  </div>
 
- 
+  <div class="scan-section">
+ <label for="Quantity">Quantity:</label><input type="text" id="Quantity"> 
+</div>
 
   <div class="scan-section">
-
-    <button onclick="startItemScan()">Scan Item</button>
+    <button onclick="startItemScan()">Scan Item .</button>
     <input type="text" id="itemBarcode" placeholder="Item Barcode" readonly>
   </div>
 
@@ -190,10 +192,52 @@
     function clearFields() {
       document.getElementById("itemBarcode").value = "";
       document.getElementById("serialBarcode").value = "";
+  document.getElementById("Quantity").value = "";
       currentTarget = null;
     }
 
     window.addEventListener("beforeunload", stopScanner);
+
+
+async function saveToGoogleSheets() {
+            const item = document.getElementById('itemBarcode').value;
+            const serial = document.getElementById('serialBarcode').value;
+            const quantity = document.getElementById('Quantity').value;
+            
+            if (!item || !serial) {
+                alert('Please fill in both barcode fields.');
+                return;
+            }
+
+            const scriptURL = 'https://script.google.com/macros/s/AKfycbz8qycRr2cGi2UA58aWZ8TsUxilKmzwQaL8qDqwsCOFgX6qhBgUreoiYHkY6GC4vQvvVQ/exec';
+            
+            try {
+                await fetch(scriptURL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item, serial, quantity, timestamp: new Date().toISOString() })
+                });
+                alert('Data saved!');
+                //document.getElementById('itemBarcode').value = '';
+                document.getElementById('serialBarcode').value = '';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Save failed. Check console.');
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
   </script>
 </body>
 </html>
