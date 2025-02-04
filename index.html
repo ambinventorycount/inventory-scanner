@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Barcode Scanner with Zoom, Manual Entry Toggle, and Save Counter</title>
+  <title>Enhanced Barcode Scanner with History and Error Handling</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body {
@@ -23,11 +23,11 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-     font-weight: bold;
+      font-weight: bold;
     }
     .zoom-controls {
       background: #f5f5f5;
-      padding: 1px;
+      padding: 10px;
       border-radius: 5px;
     }
     input[type="range"] {
@@ -42,68 +42,155 @@
       display: flex;
       gap: 10px;
       align-items: center;
-     font-weight: bold;
+      font-weight: bold;
     }
-    /* Custom class to increase text size for barcode inputs */
     .barcode-input {
       font-size: 20px;
       padding: 5px;
+      width: 200px;
     }
     button {
       padding: 8px 12px;
       cursor: pointer;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
     }
     #saveCounterDisplay {
       margin-top: 10px;
       font-weight: bold;
     }
+    .history-section {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+    }
+    .history-item {
+      padding: 5px;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .error {
+      color: #dc3545;
+      margin-top: 5px;
+      font-size: 14px;
+    }
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 20px;
+      border-radius: 5px;
+      display: none;
+    }
   </style>
 </head>
 <body>
-
   <div class="controls">
-    Ambient Barcode Inventory Count v6.5
+    <h1>Ambient Barcode Inventory Count v7.0</h1>
     <div class="zoom-controls">
       <label>Zoom: <span id="zoomValue">1</span>x</label>
       <input type="range" id="zoomRange" min="1" max="20" step="0.1" value="1" disabled>
       <div id="cameraInfo"></div>
-      <button onclick="clearFields()">Clear Fields</button>
- <button id="toggleManual" onclick="toggleManualEntry()">Enable Manual Entry</button>
-
-<button id="saveButton" onclick="saveToGoogleSheets()">Save Record !</button>
-
-
-      <!-- Display the counter for successful saves -->
+      <div class="button-group">
+        <button onclick="clearFields()">Clear Fields</button>
+        <button id="toggleManual" onclick="toggleManualEntry()">Enable Manual Entry</button>
+        <button id="saveButton" onclick="saveToGoogleSheets()">Save Record</button>
+      </div>
       <div id="saveCounterDisplay">Submitted Count: <span id="saveCounter">0</span></div>
     </div>
   </div>
 
   <div class="scan-section">
     <label for="Quantity">Quantity:</label>
-    <input type="number" id="Quantity" value="1">
+    <input type="number" id="Quantity" value="1" min="1">
+    <span class="error" id="quantityError"></span>
   </div>
 
   <div class="scan-section">
-    <button onclick="startItemScan()">Item</button>
+    <button onclick="startItemScan()">Scan Item</button>
     <input type="text" id="itemBarcode" placeholder="Item Barcode" readonly class="barcode-input">
+    <span class="error" id="itemError"></span>
   </div>
 
   <div class="scan-section">
-    <button onclick="startSerialScan()">Serial</button>
+    <button onclick="startSerialScan()">Scan Serial</button>
     <input type="text" id="serialBarcode" placeholder="Serial Barcode" readonly class="barcode-input">
+    <span class="error" id="serialError"></span>
   </div>
-
-
 
   <div id="reader"></div>
+
+  <div class="history-section">
+    <h3>Recent Scans</h3>
+    <div id="scanHistory"></div>
+  </div>
+
+  <div class="loading" id="loadingIndicator">Saving...</div>
 
   <script>
     let scanner = null;
     let currentZoom = 1;
     let videoTrack = null;
     let currentTarget = null;
-    // Global counter for successful saves
     let successfulSaveCount = 0;
+    let scanHistory = [];
+    const MAX_HISTORY = 5;
+
+    function updateScanHistory(item, serial, quantity) {
+      const timestamp = new Date().toLocaleTimeString();
+      scanHistory.unshift({ item, serial, quantity, timestamp });
+      if (scanHistory.length > MAX_HISTORY) {
+        scanHistory.pop();
+      }
+      
+      const historyHtml = scanHistory.map(scan => `
+        <div class="history-item">
+          ${scan.timestamp} - Item: ${scan.item}, Serial: ${scan.serial}, Qty: ${scan.quantity}
+        </div>
+      `).join('');
+      
+      document.getElementById('scanHistory').innerHTML = historyHtml;
+    }
+
+    function validateFields() {
+      let isValid = true;
+      const quantity = document.getElementById('Quantity').value;
+      const item = document.getElementById('itemBarcode').value;
+      const serial = document.getElementById('serialBarcode').value;
+
+      // Reset error messages
+      document.getElementById('quantityError').textContent = '';
+      document.getElementById('itemError').textContent = '';
+      document.getElementById('serialError').textContent = '';
+
+      if (!quantity || quantity < 1) {
+        document.getElementById('quantityError').textContent = 'Please enter a valid quantity';
+        isValid = false;
+      }
+      if (!item) {
+        document.getElementById('itemError').textContent = 'Item barcode is required';
+        isValid = false;
+      }
+      if (!serial) {
+        document.getElementById('serialError').textContent = 'Serial barcode is required';
+        isValid = false;
+      }
+
+      return isValid;
+    }
 
     async function startItemScan() {
       currentTarget = 'itemBarcode';
@@ -147,11 +234,15 @@
 
     async function stopScanner() {
       if (scanner) {
-        await scanner.stop();
-        scanner = null;
-        videoTrack = null;
-        document.getElementById("zoomRange").disabled = true;
-        document.getElementById("cameraInfo").textContent = "";
+        try {
+          await scanner.stop();
+          scanner = null;
+          videoTrack = null;
+          document.getElementById("zoomRange").disabled = true;
+          document.getElementById("cameraInfo").textContent = "";
+        } catch (error) {
+          console.error("Error stopping scanner:", error);
+        }
       }
     }
 
@@ -196,6 +287,7 @@
     function handleScanResult(decodedText) {
       if (currentTarget) {
         document.getElementById(currentTarget).value = decodedText;
+        document.getElementById(`${currentTarget}Error`).textContent = '';
         stopScanner();
       }
     }
@@ -216,88 +308,76 @@
     function clearFields() {
       document.getElementById("itemBarcode").value = "";
       document.getElementById("serialBarcode").value = "";
-      // Reset quantity to its default value of 1.
       document.getElementById("Quantity").value = "1";
+      document.getElementById("itemError").textContent = "";
+      document.getElementById("serialError").textContent = "";
+      document.getElementById("quantityError").textContent = "";
       currentTarget = null;
     }
 
-    window.addEventListener("beforeunload", stopScanner);
-
     async function saveToGoogleSheets() {
+      if (!validateFields()) {
+        return;
+      }
 
-  // Get the save button element and disable it
-  
- 
-   const saveButton = document.getElementById('saveButton');
- saveButton.disabled = true;
-     
-let item = document.getElementById('itemBarcode').value;
+      const saveButton = document.getElementById('saveButton');
+      const loadingIndicator = document.getElementById('loadingIndicator');
+      saveButton.disabled = true;
+      loadingIndicator.style.display = 'block';
+
+      let item = document.getElementById('itemBarcode').value;
       let serial = document.getElementById('serialBarcode').value;
       const quantity = document.getElementById('Quantity').value;
-   
-      if (!item || !serial) {
-          alert('Please fill in both barcode fields.');
-saveButton.disabled = false;
-          return;
-      }
-      if (!quantity) {
-          alert('Please fill in Quantity field.');
-saveButton.disabled = false;
-          return;
-      }
 
       if (!item.startsWith("'")) {
-          item = "'" + item;
+        item = "'" + item;
       }
       if (!serial.startsWith("'")) {
-          serial = "'" + serial;
+        serial = "'" + serial;
       }
 
-
       const scriptURL = 'https://script.google.com/macros/s/AKfycbz8qycRr2cGi2UA58aWZ8TsUxilKmzwQaL8qDqwsCOFgX6qhBgUreoiYHkY6GC4vQvvVQ/exec';
-     
+      
       try {
-          await fetch(scriptURL, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ item, serial, quantity, timestamp: new Date().toISOString() })
-          });
+        const response = await fetch(scriptURL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            item, 
+            serial, 
+            quantity, 
+            timestamp: new Date().toISOString() 
+          })
+        });
 
-
-          alert('Data saved!');
-          // Increment the counter and update display
-          successfulSaveCount++;
-          document.getElementById("saveCounter").textContent = successfulSaveCount;
-          // Clear only the serial field (or adjust as needed)
-          document.getElementById('serialBarcode').value = '';
+        updateScanHistory(item, serial, quantity);
+        successfulSaveCount++;
+        document.getElementById("saveCounter").textContent = successfulSaveCount;
+        document.getElementById('serialBarcode').value = '';
+        document.getElementById('serialError').textContent = '';
+        alert('Data saved successfully!');
       } catch (error) {
-          console.error('Error:', error);
-          alert('Save failed. Check console.');
-      }finally {
-    // Re-enable the save button regardless of outcome
-    saveButton.disabled = false;
-  }
+        console.error('Error:', error);
+        alert('Save failed. Please try again.');
+      } finally {
+        saveButton.disabled = false;
+        loadingIndicator.style.display = 'none';
+      }
     }
 
-    // Toggle function to enable or disable manual entry of the barcode fields.
     function toggleManualEntry() {
       const itemInput = document.getElementById("itemBarcode");
       const serialInput = document.getElementById("serialBarcode");
       const toggleButton = document.getElementById("toggleManual");
 
-      if (itemInput.hasAttribute("readonly")) {
-        // Remove readonly to allow manual input
-        itemInput.removeAttribute("readonly");
-        serialInput.removeAttribute("readonly");
-        toggleButton.textContent = "Disable Manual Entry";
-      } else {
-        // Add readonly to prevent manual input
-        itemInput.setAttribute("readonly", true);
-        serialInput.setAttribute("readonly", true);
-        toggleButton.textContent = "Enable Manual Entry";
-      }
+      const isReadOnly = itemInput.hasAttribute("readonly");
+      itemInput.toggleAttribute("readonly");
+      serialInput.toggleAttribute("readonly");
+      toggleButton.textContent = isReadOnly ? "Disable Manual Entry" : "Enable Manual Entry";
     }
+
+    window.addEventListener("beforeunload", stopScanner);
   </script>
 </body>
 </html>
