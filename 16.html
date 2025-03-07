@@ -155,6 +155,12 @@
                 return;
             }
 
+            // Clear previous captured image & results
+            uploadedImage.style.display = "none";
+            uploadedImage.src = "";
+            resultsTableBody.innerHTML = ""; // Clear previous predictions
+            infoLink.innerHTML = ""; // Clear info link
+
             // Set canvas size and draw image
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
@@ -173,6 +179,12 @@
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
+                    // Clear previous captured image & results
+                    uploadedImage.style.display = "none";
+                    uploadedImage.src = "";
+                    resultsTableBody.innerHTML = "";
+                    infoLink.innerHTML = "";
+
                     uploadedImage.src = e.target.result;
                     uploadedImage.style.display = "block";
                     capturedImage = e.target.result;
@@ -226,23 +238,4 @@
                         probabilityCell.textContent = (pred.probability * 100).toFixed(2) + "%";
                     });
 
-                } catch (error) {
-                    console.error("Error during image classification:", error);
-                    loadingStatus.textContent = "Error processing image.";
-                } finally {
-                    processButton.disabled = false;
-                    captureButton.disabled = false;
-                }
-            };
-        });
-
-        // Show information link for selected object
-        function showInfoLink(objectName) {
-            const query = encodeURIComponent(objectName);
-            const wikiUrl = `https://en.wikipedia.org/wiki/${query}`;
-            infoLink.innerHTML = `<p>Learn more about <strong>${objectName}</strong>: 
-                <a href="${wikiUrl}" target="_blank">Wikipedia Link</a></p>`;
-        }
-    </script>
-</body>
-</html>
+  
