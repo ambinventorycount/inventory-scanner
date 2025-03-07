@@ -17,7 +17,7 @@
             padding: 20px;
             background-color: #f9f9f9;
         }
-        video, img {
+        video, img, canvas {
             max-width: 100%;
             height: auto;
             border-radius: 10px;
@@ -39,6 +39,19 @@
             color: red;
             font-weight: bold;
         }
+        table {
+            width: 90%;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
     </style>
 </head>
 <body>
@@ -48,7 +61,7 @@
     <video id="video" autoplay playsinline muted></video>
     <button id="capture">Capture</button>
 
-    <canvas id="canvas"></canvas>
+    <canvas id="canvas" style="display: none;"></canvas>
     
     <!-- Upload Image Option -->
     <input type="file" id="imageUpload" accept="image/*" capture="environment">
@@ -63,23 +76,45 @@
     <p id="loadingStatus" style="color: red;">Loading model...</p>
     <p id="errorMessage"></p>
 
+    <!-- Results Table -->
+    <h3>Recognition Results:</h3>
+    <table id="resultsTable">
+        <thead>
+            <tr>
+                <th>Select</th>
+                <th>Prediction</th>
+                <th>Probability</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <!-- Object Info Link -->
+    <div id="infoLink"></div>
+
     <script>
         const video = document.getElementById("video");
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
         const captureButton = document.getElementById("capture");
+        const imageUpload = document.getElementById("imageUpload");
+        const uploadedImage = document.getElementById("uploadedImage");
+        const processButton = document.getElementById("processButton");
+        const resultsTableBody = document.querySelector("#resultsTable tbody");
+        const loadingStatus = document.getElementById("loadingStatus");
         const errorMessage = document.getElementById("errorMessage");
+        const infoLink = document.getElementById("infoLink");
 
-        let model;
+        let model, capturedImage;
 
         // Load the MobileNet model
         async function loadModel() {
             try {
                 model = await mobilenet.load();
-                document.getElementById("loadingStatus").textContent = "Model Loaded. Ready to process images.";
+                loadingStatus.textContent = "Model Loaded. Ready to process images.";
             } catch (error) {
                 console.error("Error loading model:", error);
-                document.getElementById("loadingStatus").textContent = "Failed to load model.";
+                loadingStatus.textContent = "Failed to load model.";
             }
         }
         loadModel();
@@ -105,15 +140,94 @@
         // Start the camera on page load
         startCamera();
 
-        // Capture image from video
+        // Capture image from video (only one capture at a time)
         captureButton.addEventListener("click", () => {
+            if (!video.srcObject) {
+                alert("Camera not available.");
+                return;
+            }
+
+            // Set canvas size and draw image
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            document.getElementById("uploadedImage").src = canvas.toDataURL("image/png");
-            document.getElementById("uploadedImage").style.display = "block";
+
+            // Convert to data URL and display
+            capturedImage = canvas.toDataURL("image/png");
+            uploadedImage.src = capturedImage;
+            uploadedImage.style.display = "block";
+            processButton.disabled = false;
         });
 
+        // Handle image upload
+        imageUpload.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    uploadedImage.src = e.target.result;
+                    uploadedImage.style.display = "block";
+                    capturedImage = e.target.result;
+                    processButton.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Process the image with MobileNet
+        processButton.addEventListener("click", async () => {
+            if (!model) {
+                alert("Model is not loaded yet. Please wait.");
+                return;
+            }
+            if (!capturedImage) {
+                alert("No image selected.");
+                return;
+            }
+
+            loadingStatus.textContent = "Processing image...";
+
+            // Create an image element to classify
+            const imgElement = new Image();
+            imgElement.src = capturedImage;
+            imgElement.onload = async () => {
+                try {
+                    const predictions = await model.classify(imgElement);
+                    loadingStatus.textContent = "Processing complete.";
+                    
+                    // Clear previous results
+                    resultsTableBody.innerHTML = "";
+                    infoLink.innerHTML = "";
+
+                    predictions.forEach((pred) => {
+                        const row = resultsTableBody.insertRow();
+                        const selectCell = row.insertCell(0);
+                        const predictionCell = row.insertCell(1);
+                        const probabilityCell = row.insertCell(2);
+                        
+                        const checkbox = document.createElement("input");
+                        checkbox.type = "checkbox";
+                        checkbox.value = pred.className;
+                        checkbox.onclick = () => showInfoLink(pred.className);
+                        selectCell.appendChild(checkbox);
+                        
+                        predictionCell.textContent = pred.className;
+                        probabilityCell.textContent = (pred.probability * 100).toFixed(2) + "%";
+                    });
+                } catch (error) {
+                    console.error("Error during image classification:", error);
+                    loadingStatus.textContent = "Error processing image.";
+                }
+            };
+        });
+
+        // Show information link for selected object
+        function showInfoLink(objectName) {
+            const query = encodeURIComponent(objectName);
+            const wikiUrl = `https://en.wikipedia.org/wiki/${query}`;
+            infoLink.innerHTML = `<p>Learn more about <strong>${objectName}</strong>: 
+                <a href="${wikiUrl}" target="_blank">Wikipedia Link</a></p>`;
+        }
     </script>
 </body>
 </html>
