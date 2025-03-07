@@ -145,6 +145,7 @@
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 video.srcObject = null;
+                video.style.display = "none"; // Hide the video preview
             }
         }
 
@@ -171,6 +172,9 @@
             uploadedImage.src = capturedImage;
             uploadedImage.style.display = "block";
             processButton.disabled = false;
+
+            // Stop and hide camera after capture
+            stopCamera();
         });
 
         // Handle image upload
@@ -207,7 +211,6 @@
             loadingStatus.textContent = "Processing image...";
             processButton.disabled = true;
             captureButton.disabled = true;
-            stopCamera();
 
             const imgElement = new Image();
             imgElement.src = capturedImage;
