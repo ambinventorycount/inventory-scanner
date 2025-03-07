@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Recognition with MobileNet</title>
+    
+    <!-- TensorFlow.js and MobileNet Model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        video, img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+        button {
+            margin: 10px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+        }
+        button:disabled {
+            background-color: #aaa;
+        }
+        #errorMessage {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h2>Upload or Capture an Image for Recognition</h2>
+
+    <!-- Camera Preview -->
+    <video id="video" autoplay playsinline muted></video>
+    <button id="capture">Capture</button>
+
+    <canvas id="canvas"></canvas>
+    
+    <!-- Upload Image Option -->
+    <input type="file" id="imageUpload" accept="image/*" capture="environment">
+    
+    <!-- Display Uploaded Image -->
+    <img id="uploadedImage" style="display: none;">
+    
+    <!-- Process Button -->
+    <button id="processButton" disabled>Process Image</button>
+
+    <!-- Status Messages -->
+    <p id="loadingStatus" style="color: red;">Loading model...</p>
+    <p id="errorMessage"></p>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const captureButton = document.getElementById("capture");
+        const errorMessage = document.getElementById("errorMessage");
+
+        let model;
+
+        // Load the MobileNet model
+        async function loadModel() {
+            try {
+                model = await mobilenet.load();
+                document.getElementById("loadingStatus").textContent = "Model Loaded. Ready to process images.";
+            } catch (error) {
+                console.error("Error loading model:", error);
+                document.getElementById("loadingStatus").textContent = "Failed to load model.";
+            }
+        }
+        loadModel();
+
+        // Function to start camera
+        async function startCamera() {
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: "environment" }, // Prefer rear camera
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+            } catch (error) {
+                console.error("Error accessing camera:", error);
+                errorMessage.textContent = "⚠️ Unable to access the camera. Please check permissions.";
+            }
+        }
+
+        // Start the camera on page load
+        startCamera();
+
+        // Capture image from video
+        captureButton.addEventListener("click", () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            document.getElementById("uploadedImage").src = canvas.toDataURL("image/png");
+            document.getElementById("uploadedImage").style.display = "block";
+        });
+
+    </script>
+</body>
+</html>
