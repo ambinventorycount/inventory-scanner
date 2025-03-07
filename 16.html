@@ -39,19 +39,6 @@
             color: red;
             font-weight: bold;
         }
-        table {
-            width: 90%;
-            margin: 20px auto;
-            border-collapse: collapse;
-        }
-        th, td {
-            border: 1px solid black;
-            padding: 10px;
-            text-align: center;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
     </style>
 </head>
 <body>
@@ -76,166 +63,37 @@
     <p id="loadingStatus" style="color: red;">Loading model...</p>
     <p id="errorMessage"></p>
 
-    <!-- Results Table -->
-    <h3>Recognition Results:</h3>
-    <table id="resultsTable">
-        <thead>
-            <tr>
-                <th>Select</th>
-                <th>Prediction</th>
-                <th>Probability</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-
-    <!-- Object Info Link -->
-    <div id="infoLink"></div>
-
     <script>
-        const video = document.getElementById("video");
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
-        const captureButton = document.getElementById("capture");
-        const imageUpload = document.getElementById("imageUpload");
-        const uploadedImage = document.getElementById("uploadedImage");
-        const processButton = document.getElementById("processButton");
-        const resultsTableBody = document.querySelector("#resultsTable tbody");
+        let model;
         const loadingStatus = document.getElementById("loadingStatus");
         const errorMessage = document.getElementById("errorMessage");
-        const infoLink = document.getElementById("infoLink");
 
-        let model, capturedImage, stream;
-
-        // Load the MobileNet model
+        // Load the MobileNet model with timeout
         async function loadModel() {
             try {
+                const timeout = setTimeout(() => {
+                    errorMessage.textContent = "⚠️ Model loading is taking too long. Check your internet or try refreshing.";
+                }, 10000); // 10 seconds timeout warning
+
                 model = await mobilenet.load();
-                loadingStatus.textContent = "Model Loaded. Ready to process images.";
+                clearTimeout(timeout);
+                loadingStatus.textContent = "✅ Model Loaded. Ready to process images.";
+                document.getElementById("processButton").disabled = false;
             } catch (error) {
                 console.error("Error loading model:", error);
-                loadingStatus.textContent = "Failed to load model.";
+                loadingStatus.textContent = "❌ Failed to load model.";
+                errorMessage.textContent = "⚠️ Model failed to load. Check console (F12) for details.";
             }
         }
         loadModel();
 
-        // Function to start camera
-        async function startCamera() {
-            try {
-                const constraints = {
-                    video: {
-                        facingMode: { ideal: "environment" }, // Prefer rear camera
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
-                };
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-            } catch (error) {
-                console.error("Error accessing camera:", error);
-                errorMessage.textContent = "⚠️ Unable to access the camera. Please check permissions.";
-            }
-        }
-
-        // Start the camera on page load
-        startCamera();
-
-        // Function to stop camera when processing
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop()); // Stop all tracks
-                video.srcObject = null; // Remove the video source
-            }
-        }
-
-        // Capture image from video (only one capture at a time)
-        captureButton.addEventListener("click", () => {
-            if (!video.srcObject) {
-                alert("Camera not available.");
-                return;
-            }
-
-            // Clear previous captured image & results
-            uploadedImage.style.display = "none";
-            uploadedImage.src = "";
-            resultsTableBody.innerHTML = ""; // Clear previous predictions
-            infoLink.innerHTML = ""; // Clear info link
-
-            // Set canvas size and draw image
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // Convert to data URL and display
-            capturedImage = canvas.toDataURL("image/png");
-            uploadedImage.src = capturedImage;
-            uploadedImage.style.display = "block";
-            processButton.disabled = false;
-        });
-
-        // Handle image upload
-        imageUpload.addEventListener("change", (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    // Clear previous captured image & results
-                    uploadedImage.style.display = "none";
-                    uploadedImage.src = "";
-                    resultsTableBody.innerHTML = "";
-                    infoLink.innerHTML = "";
-
-                    uploadedImage.src = e.target.result;
-                    uploadedImage.style.display = "block";
-                    capturedImage = e.target.result;
-                    processButton.disabled = false;
-                };
-                reader.readAsDataURL(file);
+        // Retry Model Loading on Failure
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "r") {
+                loadingStatus.textContent = "Retrying model load...";
+                loadModel();
             }
         });
-
-        // Process the image with MobileNet
-        processButton.addEventListener("click", async () => {
-            if (!model) {
-                alert("Model is not loaded yet. Please wait.");
-                return;
-            }
-            if (!capturedImage) {
-                alert("No image selected.");
-                return;
-            }
-
-            loadingStatus.textContent = "Processing image...";
-            processButton.disabled = true;
-            captureButton.disabled = true;
-            stopCamera(); // Disable camera when processing
-
-            // Create an image element to classify
-            const imgElement = new Image();
-            imgElement.src = capturedImage;
-            imgElement.onload = async () => {
-                try {
-                    const predictions = await model.classify(imgElement);
-                    loadingStatus.textContent = "Processing complete.";
-                    
-                    // Clear previous results
-                    resultsTableBody.innerHTML = "";
-                    infoLink.innerHTML = "";
-
-                    predictions.forEach((pred) => {
-                        const row = resultsTableBody.insertRow();
-                        const selectCell = row.insertCell(0);
-                        const predictionCell = row.insertCell(1);
-                        const probabilityCell = row.insertCell(2);
-                        
-                        const checkbox = document.createElement("input");
-                        checkbox.type = "checkbox";
-                        checkbox.value = pred.className;
-                        checkbox.onclick = () => showInfoLink(pred.className);
-                        selectCell.appendChild(checkbox);
-                        
-                        predictionCell.textContent = pred.className;
-                        probabilityCell.textContent = (pred.probability * 100).toFixed(2) + "%";
-                    });
-
-  
+    </script>
+</body>
+</html>
