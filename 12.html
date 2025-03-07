@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Accuracy Image Recognition</title>
+    
+    <!-- Load Latest TensorFlow.js and Advanced Models -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/faster-rcnn"></script>
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        video, img {
+            max-width: 100%;
+            height: auto;
+        }
+        table {
+            margin: 20px auto;
+            width: 80%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        canvas {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h2>Upload or Capture an Image for High-Accuracy Recognition</h2>
+    
+    <input type="file" id="imageUpload" accept="image/*">
+    
+    <video id="video" width="300" height="200" autoplay></video>
+    <button id="capture">Capture</button>
+    
+    <canvas id="canvas"></canvas>
+    
+    <img id="uploadedImage" width="300" style="display: none;">
+    
+    <button id="processButton" disabled>Process Image</button>
+
+    <p id="loadingStatus" style="color: red;">Loading models...</p>
+
+    <h3>Recognition Results:</h3>
+    <table border="1" id="resultsTable">
+        <thead>
+            <tr>
+                <th>Select</th>
+                <th>Prediction</th>
+                <th>Probability</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const imageUpload = document.getElementById("imageUpload");
+        const uploadedImage = document.getElementById("uploadedImage");
+        const captureButton = document.getElementById("capture");
+        const processButton = document.getElementById("processButton");
+        const resultsTableBody = document.querySelector("#resultsTable tbody");
+        const loadingStatus = document.getElementById("loadingStatus");
+        
+        let classificationModel, objectDetectionModel, advancedDetectionModel;
+
+        async function loadModels() {
+            try {
+                classificationModel = await mobilenet.load({ version: 2, alpha: 1.0 });
+                console.log("MobileNet v2 model loaded successfully.");
+                objectDetectionModel = await cocoSsd.load();
+                console.log("Coco-SSD model loaded successfully.");
+                advancedDetectionModel = await fasterRcnn.load();
+                console.log("Faster R-CNN model loaded successfully.");
+                loadingStatus.textContent = "Models Loaded. Ready to process images.";
+                processButton.disabled = false;
+            } catch (error) {
+                console.error("Error loading models:", error);
+                loadingStatus.textContent = "Failed to load models. Try refreshing or check the console.";
+            }
+        }
+        loadModels();
+
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = stream;
+            } catch (error) {
+                console.error("Error accessing webcam:", error);
+            }
+        }
+        setupCamera();
+
+        function preprocessImage(img) {
+            return tf.browser.fromPixels(img)
+                .resizeNearestNeighbor([416, 416]) // Higher resolution for accuracy
+                .toFloat()
+                .div(tf.scalar(255))
+                .expandDims();
+        }
+
+        captureButton.addEventListener("click", () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            uploadedImage.src = canvas.toDataURL("image/png");
+            uploadedImage.style.display = "block";
+            processButton.disabled = false;
+        });
+
+        imageUpload.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    uploadedImage.src = e.target.result;
+                    uploadedImage.style.display = "block";
+                    processButton.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        processButton.addEventListener("click", async () => {
+            if (!classificationModel || !objectDetectionModel || !advancedDetectionModel) {
+                alert("Models are not loaded yet. Please wait.");
+                return;
+            }
+            
+            loadingStatus.textContent = "Processing image...";
+            try {
+                const imgTensor = preprocessImage(uploadedImage);
+                const predictions = await classificationModel.classify(imgTensor, 5);
+                const detections = await objectDetectionModel.detect(uploadedImage);
+                const advancedDetections = await advancedDetectionModel.detect(uploadedImage);
+                loadingStatus.textContent = "Processing complete.";
+                
+                resultsTableBody.innerHTML = "";
+                predictions.forEach((pred, index) => {
+                    const row = resultsTableBody.insertRow();
+                    const selectCell = row.insertCell(0);
+                    const predictionCell = row.insertCell(1);
+                    const probabilityCell = row.insertCell(2);
+                    
+                    const checkbox = document.createElement("input");
+                    checkbox.type = "checkbox";
+                    checkbox.value = index;
+                    selectCell.appendChild(checkbox);
+                    
+                    predictionCell.textContent = pred.className;
+                    probabilityCell.textContent = (pred.probability * 100).toFixed(2) + "%";
+                });
+                
+                console.log("Basic Object Detection Results:", detections);
+                console.log("Advanced Object Detection Results:", advancedDetections);
+            } catch (error) {
+                console.error("Error during image classification:", error);
+                loadingStatus.textContent = "Error processing image. See console.";
+            }
+        });
+    </script>
+</body>
+</html>
