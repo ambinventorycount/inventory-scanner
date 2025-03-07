@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Recognition with MobileNet</title>
+    
+    <!-- TensorFlow.js and MobileNet Model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script> <!-- Person Detection Model -->
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        video, img, canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+        button {
+            margin: 10px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+        }
+        button:disabled {
+            background-color: #aaa;
+        }
+        select {
+            margin-bottom: 10px;
+            padding: 8px;
+            font-size: 16px;
+        }
+        #errorMessage {
+            color: red;
+            font-weight: bold;
+        }
+        table {
+            width: 90%;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h2>Upload or Capture an Image for Recognition</h2>
+
+    <!-- Dropdown for selecting detection mode -->
+    <label for="detectionMode">Select Detection Mode:</label>
+    <select id="detectionMode">
+        <option value="object">General Object Detection</option>
+        <option value="person">Person Detection</option>
+    </select>
+
+    <!-- Camera Preview -->
+    <video id="video" autoplay playsinline muted></video>
+    <button id="capture">Capture</button>
+
+    <canvas id="canvas" style="display: none;"></canvas>
+    
+    <!-- Upload Image Option -->
+    <input type="file" id="imageUpload" accept="image/*" capture="environment">
+    
+    <!-- Display Uploaded Image -->
+    <img id="uploadedImage" style="display: none;">
+    
+    <!-- Process Button -->
+    <button id="processButton" disabled>Process Image</button>
+
+    <!-- Status Messages -->
+    <p id="loadingStatus" style="color: red;">Loading model...</p>
+    <p id="errorMessage"></p>
+
+    <!-- Results Table -->
+    <h3>Recognition Results:</h3>
+    <table id="resultsTable">
+        <thead>
+            <tr>
+                <th>Select</th>
+                <th>Prediction</th>
+                <th>Probability</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <!-- Object Info Link -->
+    <div id="infoLink"></div>
+
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const captureButton = document.getElementById("capture");
+        const imageUpload = document.getElementById("imageUpload");
+        const uploadedImage = document.getElementById("uploadedImage");
+        const processButton = document.getElementById("processButton");
+        const detectionMode = document.getElementById("detectionMode");
+        const resultsTableBody = document.querySelector("#resultsTable tbody");
+        const loadingStatus = document.getElementById("loadingStatus");
+        const errorMessage = document.getElementById("errorMessage");
+        const infoLink = document.getElementById("infoLink");
+
+        let model, capturedImage, stream;
+
+        // Load the appropriate model based on selection
+        async function loadModel() {
+            loadingStatus.textContent = "Loading model...";
+            try {
+                if (detectionMode.value === "object") {
+                    model = await mobilenet.load();
+                    loadingStatus.textContent = "✅ MobileNet (Object Detection) Loaded.";
+                } else if (detectionMode.value === "person") {
+                    model = await cocoSsd.load();
+                    loadingStatus.textContent = "✅ COCO-SSD (Person Detection) Loaded.";
+                }
+                processButton.disabled = false;
+            } catch (error) {
+                console.error("Error loading model:", error);
+                loadingStatus.textContent = "❌ Model failed to load.";
+                errorMessage.textContent = "⚠️ Model couldn't load. Check your internet.";
+            }
+        }
+        loadModel();
+
+        // Reload model when the dropdown changes
+        detectionMode.addEventListener("change", loadModel);
+
+        // Start the camera
+        async function startCamera() {
+            try {
+                const constraints = {
+                    video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                };
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+            } catch (error) {
+                console.error("Error accessing camera:", error);
+                errorMessage.textContent = "⚠️ Unable to access the camera. Please check permissions.";
+            }
+        }
+        startCamera();
+
+        // Stop the camera
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                video.style.display = "none"; // Hide the video preview
+            }
+        }
+
+        // Capture image from video
+        captureButton.addEventListener("click", () => {
+            if (!video.srcObject) {
+                alert("Camera not available.");
+                return;
+            }
+
+            // Clear previous results
+            uploadedImage.style.display = "none";
+            uploadedImage.src = "";
+            resultsTableBody.innerHTML = "";
+            infoLink.innerHTML = "";
+
+            // Capture image
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Store captured image
+            capturedImage = canvas.toDataURL("image/png");
+            uploadedImage.src = capturedImage;
+            uploadedImage.style.display = "block";
+            processButton.disabled = false;
+
+            // Stop and hide camera after capture
+            stopCamera();
+        });
+
+        // Handle image upload
+        imageUpload.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    uploadedImage.src = e.target.result;
+                    uploadedImage.style.display = "block";
+                    capturedImage = e.target.result;
+                    processButton.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Process the image based on selected model
+        processButton.addEventListener("click", async () => {
+            if (!model || !capturedImage) {
+                alert("No model or image selected.");
+                return;
+            }
+
+            loadingStatus.textContent = "Processing image...";
+            processButton.disabled = true;
+
+            const imgElement = new Image();
+            imgElement.src = capturedImage;
+            imgElement.onload = async () => {
+                try {
+                    let predictions;
+                    if (detectionMode.value === "object") {
+                        predictions = await model.classify(imgElement);
+                    } else {
+                        predictions = await model.detect(imgElement);
+                    }
+                    
+                    loadingStatus.textContent = "✅ Processing complete.";
+                    resultsTableBody.innerHTML = "";
+
+                    predictions.forEach((pred) => {
+                        const row = resultsTableBody.insertRow();
+                        row.insertCell(0).innerHTML = `<input type="checkbox" onclick="showInfoLink('${pred.className || pred.class}')">`;
+                        row.insertCell(1).textContent = pred.className || pred.class;
+                        row.insertCell(2).textContent = (pred.probability * 100 || pred.score * 100).toFixed(2) + "%";
+                    });
+                } catch (error) {
+                    loadingStatus.textContent = "❌ Error processing image.";
+                } finally {
+                    processButton.disabled = false;
+                }
+            };
+        });
+    </script>
+</body>
+</html>
