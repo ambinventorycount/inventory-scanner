@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload & Processing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .upload-container {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #preview {
+            max-width: 300px;
+            margin-top: 20px;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success { background-color: #dff0d8; }
+        .error { background-color: #f2dede; }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h2>Upload Image</h2>
+        <form id="uploadForm">
+            <input type="file" id="imageInput" accept="image/*" required>
+            <button type="submit">Upload & Process</button>
+        </form>
+        <img id="preview" src="#" alt="Image preview">
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const cloudName = 'dgqjs1bn3'; // Replace with your Cloudinary cloud name
+        const uploadPreset = 'ml_default'; // Replace with your upload preset
+        const scrapingDogKey = '67cd2a547dcc576d4662f6dc'; // Replace with your ScrapingDog API key
+
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                const preview = document.getElementById('preview');
+                preview.src = reader.result;
+                preview.style.display = 'block';
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = 'Uploading...';
+            statusDiv.className = '';
+
+            const file = document.getElementById('imageInput').files[0];
+            if (!file) {
+                showError('Please select a file first');
+                return;
+            }
+
+            try {
+                // Upload to Cloudinary
+                const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('upload_preset', uploadPreset);
+
+                const cloudinaryResponse = await fetch(cloudinaryUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const cloudinaryData = await cloudinaryResponse.json();
+                if (cloudinaryData.error) {
+                    throw new Error(cloudinaryData.error.message);
+                }
+
+                // Send to ScrapingDog API
+                statusDiv.innerHTML = 'Processing with ScrapingDog...';
+                const imageUrl = encodeURIComponent(cloudinaryData.secure_url);
+                const scrapingDogUrl = `https://api.scrapingdog.com/google_lens?api_key=${scrapingDogKey}&url=${imageUrl}`;
+
+                const scrapingDogResponse = await fetch(scrapingDogUrl);
+                const scrapingDogData = await scrapingDogResponse.json();
+
+                statusDiv.innerHTML = `Processing successful! Response: ${JSON.stringify(scrapingDogData)}`;
+                statusDiv.className = 'success';
+
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            }
+        });
+
+        function showError(message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = message;
+            statusDiv.className = 'error';
+        }
+    </script>
+</body>
+</html>
