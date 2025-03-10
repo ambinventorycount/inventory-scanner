@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upload & Processing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .upload-container {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #preview {
+            max-width: 300px;
+            margin-top: 20px;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success { background-color: #dff0d8; }
+        .error { background-color: #f2dede; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="upload-container">
+        <h2>Upload Image</h2>
+        <form id="uploadForm">
+            <input type="file" id="imageInput" accept="image/*" required>
+            <button type="submit">Upload & Process</button>
+        </form>
+        <img id="preview" src="#" alt="Image preview">
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const cloudName = 'dgqjs1bn3'; // Replace with your Cloudinary cloud name
+        const uploadPreset = 'ml_default'; // Replace with your upload preset
+        const scrapingDogKey = '67cd2a547dcc576d4662f6dc'; // Replace with your ScrapingDog API key
+
+        document.getElementById('imageInput').addEventListener('change', function(e) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                const preview = document.getElementById('preview');
+                preview.src = reader.result;
+                preview.style.display = 'block';
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = 'Uploading...';
+            statusDiv.className = '';
+
+            const file = document.getElementById('imageInput').files[0];
+            if (!file) {
+                showError('Please select a file first');
+                return;
+            }
+
+            try {
+                // Upload to Cloudinary
+                const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${cloudName}/upload`;
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('upload_preset', uploadPreset);
+
+                const cloudinaryResponse = await fetch(cloudinaryUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const cloudinaryData = await cloudinaryResponse.json();
+                if (cloudinaryData.error) {
+                    throw new Error(cloudinaryData.error.message);
+                }
+
+                // Send to ScrapingDog API
+                statusDiv.innerHTML = 'Processing ...';
+                const imageUrl = encodeURIComponent(cloudinaryData.secure_url);
+                const scrapingDogUrl = `https://api.scrapingdog.com/google_lens?api_key=${scrapingDogKey}&url=${imageUrl}&exact_matches=True`;
+
+                const scrapingDogResponse = await fetch(scrapingDogUrl);
+                const scrapingDogData = await scrapingDogResponse.json();
+
+                // Convert JSON to Table and display
+                statusDiv.innerHTML = '<h3>Processing successful! Result:</h3>';
+                statusDiv.className = 'success';
+                statusDiv.appendChild(jsonToTable(scrapingDogData));
+
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            }
+        });
+
+function jsonToTable(jsonData) {
+    const table = document.createElement('table');
+
+    for (const key in jsonData) {
+        if (jsonData.hasOwnProperty(key)) {
+            const row = table.insertRow();
+            const cellKey = row.insertCell(0);
+            const cellValue = row.insertCell(1);
+
+            cellKey.textContent = key;
+            cellKey.style.fontWeight = 'bold';
+            cellKey.style.verticalAlign = 'top';
+
+            if (typeof jsonData[key] === 'object' && jsonData[key] !== null) {
+                // Recursive call for nested objects/arrays
+                cellValue.appendChild(jsonToTable(jsonData[key]));
+            } else {
+                cellValue.textContent = jsonData[key];
+            }
+
+            cellKey.style.padding = '8px';
+            cellValue.style.padding = '8px';
+        }
+    }
+
+    table.style.border = '1px solid #ccc';
+    table.style.borderCollapse = 'collapse';
+    table.style.marginTop = '10px';
+    table.style.width = '100%';
+
+    return table;
+}
+
+
+        function showError(message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = message;
+            statusDiv.className = 'error';
+        }
+    </script>
+</body>
+</html>
