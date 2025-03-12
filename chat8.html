@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Image Upload with Question (GPT-4o-mini)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        input, button {
+            margin: 10px 0;
+            padding: 10px;
+            width: 100%;
+            max-width: 400px;
+            display: block;
+        }
+        #preview {
+            margin-top: 15px;
+            max-width: 100%;
+            height: auto;
+            display: none; /* Initially hidden */
+            border-radius: 10px;
+            border: 1px solid #ccc;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            background: #f9f9f9;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Ask a Question About an Image (GPT-4o-mini)</h2>
+    <!-- Enable camera input on mobile -->
+    <input type="file" id="imageInput" accept="image/*" capture="camera">
+    <img id="preview" src="#" alt="Image Preview">
+    <input type="text" id="questionInput" placeholder="Enter your question about the image...">
+    <button id="uploadBtn">Upload Image and Ask</button>
+    <div id="result">AI response will appear here...</div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const preview = document.getElementById('preview');
+        const resultDiv = document.getElementById('result');
+
+        // Show image preview and clear previous result when new image is selected
+        imageInput.addEventListener('change', () => {
+            const file = imageInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block'; // Show preview
+                };
+                reader.readAsDataURL(file);
+                resultDiv.textContent = "AI response will appear here..."; // Clear previous result
+            }
+        });
+
+        // Function to upload image and question
+        async function uploadImageWithQuestion(imageFile, question) {
+            const apiKey = ""; // Replace with your actual API key
+            const apiUrl = "https://api.openai.com/v1/chat/completions";
+
+            // Convert image to Base64
+            const toBase64 = (file) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]); // Get base64 only
+                reader.onerror = (error) => reject(error);
+            });
+
+            try {
+                const base64Image = await toBase64(imageFile);
+
+                const requestBody = {
+                    model: "gpt-4o-mini", // Updated to correct vision model
+                    messages: [
+                        { role: "system", content: "You are an AI assistant capable of analyzing images and answering questions." },
+                        {
+                            role: "user",
+                            content: [
+                                { type: "text", text: question },
+                                { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } }
+                            ]
+                        }
+                    ],
+                    max_tokens: 500
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`API Error: ${errorText}`);
+                }
+
+                const responseData = await response.json();
+                console.log("AI Response:", responseData);
+                return responseData.choices[0]?.message?.content || "No response from AI.";
+            } catch (error) {
+                console.error("Error uploading image:", error);
+                return "Error processing image.";
+            }
+        }
+
+        // Button click event handler
+        document.getElementById("uploadBtn").addEventListener("click", async () => {
+            const fileInput = document.getElementById("imageInput");
+            const questionInput = document.getElementById("questionInput");
+
+            if (fileInput.files.length === 0) {
+                alert("Please select or take a photo.");
+                return;
+            }
+
+            const imageFile = fileInput.files[0];
+            const question = questionInput.value.trim();
+
+            if (!question) {
+                alert("Please enter a question.");
+                return;
+            }
+
+            resultDiv.textContent = "Processing... Please wait.";
+            const result = await uploadImageWithQuestion(imageFile, question);
+            resultDiv.textContent = result;
+        });
+    </script>
+
+</body>
+</html>
