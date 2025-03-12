@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Image Q&A (Modern Look with Voice)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Arial', sans-serif; background: #f4f4f7; padding: 20px; color: #333; }
+        h2 { text-align: center; margin-bottom: 20px; color: #222; font-size: 1.6rem; cursor: pointer; }
+        .card { background: white; padding: 20px; margin: 10px auto; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); max-width: 500px; }
+        input, button, textarea { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #ddd; font-size: 1rem; outline: none; transition: all 0.2s; }
+        input:focus, textarea:focus { border-color: #007bff; box-shadow: 0 0 4px rgba(0,123,255,0.3); }
+        button { background: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #preview {
+            display: none;
+            width: 200px;
+            height: auto;
+            border-radius: 16px;
+            margin: 15px auto;
+            border: 3px solid #ddd;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .bullet-button {
+            background: #e9ecef;
+            border: 1px solid #ccc;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 12px;
+            text-align: left;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            cursor: pointer;
+            font-size: 1rem;
+            color: #333;
+            font-weight: 500;
+        }
+        .bullet-button:hover {
+            background: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+        #result {
+            padding: 15px;
+            margin: 20px auto 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            font-size: 1rem;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            max-width: 500px;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: left;
+        }
+        #micBtn { width: auto; margin-left: 10px; padding: 14px; display: inline-block; }
+    </style>
+</head>
+<body>
+
+<h2 id="titleHeader">🧠 AI Image Q&A</h2>
+
+<div class="card" id="apiKeyContainer">
+    <input type="password" id="apiKeyInput" placeholder="🔑 Enter your OpenAI API Key..." />
+</div>
+
+<div class="card">
+    <input type="file" id="imageInput" accept="image/*" capture="camera">
+    <img id="preview" src="#" alt="Image Preview">
+    <div style="display: flex; align-items: center;">
+        <input type="text" id="questionInput" placeholder="Ask a question about the image...">
+        <button id="micBtn" aria-label="Speak your question">🎙️</button>
+    </div>
+    <button id="uploadBtn">Submit Question</button>
+</div>
+
+<div class="card" id="bullets"></div>
+<div class="card" id="result">AI response will appear here...</div>
+
+<script>
+    const imageInput = document.getElementById('imageInput');
+    const preview = document.getElementById('preview');
+    const resultDiv = document.getElementById('result');
+    const bulletsDiv = document.getElementById('bullets');
+    const questionInput = document.getElementById('questionInput');
+    const micBtn = document.getElementById('micBtn');
+
+    // Toggle API Key visibility
+    document.getElementById('titleHeader').addEventListener('click', () => {
+        const apiKeyContainer = document.getElementById('apiKeyContainer');
+        apiKeyContainer.style.display = apiKeyContainer.style.display === 'none' ? 'block' : 'none';
+    });
+
+    // Image preview
+    imageInput.addEventListener('change', () => {
+        const file = imageInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+            resultDiv.textContent = "AI response will appear here...";
+            bulletsDiv.innerHTML = "";
+        }
+    });
+
+    // Upload image with question to AI
+    async function uploadImageWithQuestion(imageFile, question) {
+        const apiKey = document.getElementById('apiKeyInput').value.trim();
+        if (!apiKey) {
+            alert("Please enter your API key!");
+            return "Missing API key.";
+        }
+
+        const apiUrl = "https://api.openai.com/v1/chat/completions";
+        const toBase64 = (file) => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+        });
+
+        try {
+            const base64Image = await toBase64(imageFile);
+            const requestBody = {
+                model: "gpt-4o-mini",
+                messages: [
+                    { role: "system", content: "You are an AI assistant capable of analyzing images and answering questions." },
+                    { role: "user", content: [{ type: "text", text: question }, { type: "image_url", image_url: { url: `data:image/png;base64,${base64Image}` } }] }
+                ],
+                max_tokens: 500
+            };
+
+            const response = await fetch(apiUrl, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) throw new Error(`API Error: ${await response.text()}`);
+            const data = await response.json();
+            return data.choices[0]?.message?.content || "No response from AI.";
+        } catch (error) {
+            console.error("Error:", error);
+            return "Error processing image.";
+        }
+    }
+
+    function generateBulletPoints(responseText) {
+    bulletsDiv.innerHTML = "";
+    const normalizedText = responseText.replace(/\r\n|\r/g, '\n'); // Normalize line breaks
+    const points = normalizedText.split(/\n(?=(?:- |\d+\.\s))/).filter(Boolean);
+    
+    points.forEach((point, idx) => {
+        const cleanText = point.replace(/^(- |\d+\.\s)/, '').trim();
+        if (cleanText.length > 3) { // Skip empty or too short points
+            const btn = document.createElement('button');
+            btn.textContent = cleanText;
+            btn.className = 'bullet-button';
+            btn.dataset.index = idx; // Optional: add index for tracking
+            btn.onclick = () => {
+                questionInput.value = cleanText;
+                showDetail(idx, points);
+            };
+            bulletsDiv.appendChild(btn);
+        }
+    });
+}
+
+    // Mic button functionality
+    micBtn.addEventListener('click', () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return alert('Speech Recognition not supported!');
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        micBtn.textContent = '🎙️ Listening...';
+        recognition.start();
+        recognition.onresult = (e) => questionInput.value = e.results[0][0].transcript;
+        recognition.onend = () => micBtn.textContent = '🎙️';
+    });
+
+    // Handle submit
+    document.getElementById("uploadBtn").addEventListener("click", async () => {
+        if (!imageInput.files.length || !questionInput.value.trim()) return alert("Please select image and type question!");
+        resultDiv.textContent = "Processing..."; bulletsDiv.innerHTML = "";
+        const response = await uploadImageWithQuestion(imageInput.files[0], questionInput.value.trim());
+        resultDiv.textContent = response;
+        if (response.match(/^- |\d+\.\s/)) generateBulletPoints(response);
+    });
+</script>
+
