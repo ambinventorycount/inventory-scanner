@@ -245,7 +245,23 @@
         font-size: 14px;
       }
     }
+.reset-button {
+  background: #dc3545;
+  white-space: nowrap;
+  height: 44px; /* Add matching height */
+  padding: 0 14px; /* Adjust padding */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
+@media (max-width: 480px) {
+  .reset-button {
+    height: 40px; /* Mobile height match */
+    padding: 0 14px;
+    font-size: 14px;
+  }
+}
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
