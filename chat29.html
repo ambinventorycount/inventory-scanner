@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>HVAC Assistant</title>
+  <title>HVAC AI Assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -20,7 +20,7 @@
     
     .chat-history {
       flex: 1;
-      padding: 20px;
+      padding: 18px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -269,14 +269,26 @@
   <!-- Body content remains unchanged from original -->
   <div class="container">
     <div class="header-container">
-      <h1>🤖 HVAC Assistant Pro</h1>
+      <h1>🤖 HVAC AI Assistant</h1>
       <button id="micButton" onclick="startVoiceInput()" aria-label="Start voice input">🎙️</button>
     </div>
 
     <div class="chat-container">
       <div class="chat-history" id="chatHistory">
         <div class="message ai-message">
-          Hello! I'm your HVAC expert assistant. How can I help today?
+         
+
+content: `Hello! I'm your HVAC expert assistant. You can:
+        <ul>
+          <li>Describe issues in plain language</li>
+          <li>Upload photos of equipment</li>
+          <li>Click headers/questions to follow up</li>
+        </ul>
+        How can I help today?`
+
+
+
+
         </div>
       </div>
       
