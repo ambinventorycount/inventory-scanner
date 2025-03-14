@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Conversational HVAC Assistant</title>
+  <title> HVAC Assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -138,14 +138,27 @@
       align-items: center;
     }
 
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.header-container h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
 #micButton {
   background: #28a745;
   color: white;
   border: none;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-radius: 25px;
   cursor: pointer;
   transition: opacity 0.2s;
+  font-size: 16px;
 }
 
 #micButton:hover { opacity: 0.9; }
@@ -163,7 +176,11 @@
 </head>
 <body>
   <div class="container">
-    <h1>🤖 HVAC Conversational Assistant</h1>
+    <div class="header-container">
+  <h1>🤖 HVAC Assistant</h1>
+  <button id="micButton" onclick="startVoiceInput()">🎙️</button>
+</div>
+
     <div class="chat-container">
       <div class="chat-history" id="chatHistory">
         <div class="message ai-message">
@@ -181,7 +198,7 @@
         <input type="file" id="imageUpload" accept="image/*" style="display: none;">
         <button onclick="document.getElementById('imageUpload').click()">📷</button>
         <input type="text" id="userInput" placeholder="Type your message...">
-<button id="micButton" onclick="startVoiceInput()">🎙️</button>
+
 
         <button id="sendButton" onclick="handleSend()">Send</button>
       </div>
