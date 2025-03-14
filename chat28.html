@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HVAC Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; }
+    
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    .chat-container { 
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      height: 70vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .chat-history {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      line-height: 1.5;
+    }
+    
+    .user-message {
+      background: #007bff;
+      color: white;
+      align-self: flex-end;
+      border-radius: 18px 18px 4px 18px;
+    }
+    
+    .ai-message {
+      background: #ffffff;
+      align-self: flex-start;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px 18px 18px 18px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .input-container {
+      display: flex;
+      gap: 10px;
+      padding: 0px;
+      border-top: 1px solid #eee;
+      background: white;
+      position: relative;
+    }
+    
+    #userInput {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #ddd;
+      border-radius: 25px;
+      font-size: 16px;
+    }
+    
+    button { 
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    
+    .reset-button {
+      background: #dc3545;
+      white-space: nowrap;
+    }
+    
+    button:hover { opacity: 0.9; }
+    button:disabled { background: #b0b0b0; cursor: not-allowed; }
+    
+    .loading { 
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #007bff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s linear infinite;
+    }
+    
+    .warning { 
+      color: #c0392b;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fdedec;
+      border-left: 4px solid #c0392b;
+    }
+    
+    .image-preview {
+      max-width: 200px;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+
+    .clickable-header {
+      color: #007bff;
+      cursor: pointer;
+      text-decoration: underline;
+      transition: all 0.3s;
+      margin: 10px 0;
+    }
+
+    .clickable-header:hover {
+      opacity: 0.8;
+    }
+
+    .clickable-question {
+      cursor: pointer;
+      color: #007bff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin: 5px 0;
+    }
+
+    .clickable-question:hover {
+      background: #f0f8ff;
+    }
+
+    .api-key-container {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .header-container h1 {
+      margin: 0;
+      font-size: 1.8rem;
+    }
+
+    #micButton {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      font-size: 16px;
+    }
+
+    #micButton:hover { opacity: 0.9; }
+
+    #apiKey {
+      flex: 1;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+
+    .error-message {
+      color: #dc3545;
+      font-size: 0.9em;
+      margin-top: 5px;
+      position: absolute;
+      bottom: -25px;
+      left: 0;
+      display: none;
+    }
+
+    .image-preview-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .remove-image {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 10px;
+      }
+      
+      .chat-container {
+        height: 65vh;
+      }
+      
+      .input-container {
+        flex-wrap: wrap;
+      }
+      
+      #userInput {
+        flex: 1 1 100%;
+        margin-bottom: 10px;
+      }
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header-container">
+      <h1>🤖 HVAC Technician Assistant</h1>
+      <button id="micButton" onclick="startVoiceInput()" aria-label="Start voice input">🎙️</button>
+    </div>
+
+    <div class="chat-container">
+      <div class="chat-history" id="chatHistory">
+        <div class="message ai-message">
+          Hello! I'm your HVAC expert assistant. You can:
+          <ul>
+            <li>Describe issues in plain language</li>
+            <li>Upload photos of equipment</li>
+            <li>Click headers/questions to follow up</li>
+          </ul>
+          How can I help today?
+        </div>
+      </div>
+      
+      <div class="input-container">
+        <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+        <button onclick="document.getElementById('imageUpload').click()" aria-label="Upload image">📷</button>
+        <input type="text" id="userInput" placeholder="Type your message..." aria-label="Type your HVAC question here">
+        <button id="sendButton" onclick="handleSend()" aria-label="Send message">Send</button>
+        <div class="error-message" id="errorMessage"></div>
+      </div>
+    </div>
+    
+    <div class="api-key-container">
+      <input type="password" id="apiKey" placeholder="Enter OpenAI API Key">
+      <button class="reset-button" onclick="resetChat()">Reset Chat</button>
+    </div>
+  </div>
+
+<script>
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const SYSTEM_PROMPT = `You are an HVAC expert technician assistant. Format responses with:
+## Section Headers
+- Bullet points for questions
+**WARNING:** Safety alerts
+1. Numbered steps`;
+
+let conversationHistory = [
+  { role: "system", content: SYSTEM_PROMPT },
+  { role: "assistant", content: "Hello! How can I assist with your HVAC system today?" }
+];
+
+function resetChat() {
+  conversationHistory = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { 
+      role: "assistant", 
+      content: `Hello! I'm your HVAC expert assistant. You can:
+        <ul>
+          <li>Describe issues in plain language</li>
+          <li>Upload photos of equipment</li>
+          <li>Click headers/questions to follow up</li>
+        </ul>
+        How can I help today?`
+    }
+  ];
+  
+  const chatHistory = document.getElementById('chatHistory');
+  chatHistory.innerHTML = '<div class="message ai-message">' + 
+    conversationHistory[1].content + '</div>';
+  
+  document.getElementById('imageUpload').value = '';
+  chatHistory.scrollTop = 0;
+}
+
+async function handleSend() {
+  const userInput = document.getElementById('userInput');
+  const apiKey = document.getElementById('apiKey').value;
+  const message = userInput.value.trim();
+  const imageFile = document.getElementById('imageUpload').files[0];
+  const errorMessage = document.getElementById('errorMessage');
+  
+  if (!apiKey) return showError('Please enter your API key');
+  if (!message && !imageFile) return showError('Please enter a message or upload an image');
+
+  const sendButton = document.getElementById('sendButton');
+  sendButton.disabled = true;
+  sendButton.innerHTML = '<div class="loading"></div>';
+
+  try {
+    const userMessages = [];
+    
+    if (message) {
+      const msgDiv = addMessage(message, 'user');
+      userMessages.push(msgDiv);
+      conversationHistory.push({ role: "user", content: message });
+    }
+
+    if (imageFile) {
+      if (!ALLOWED_IMAGE_TYPES.includes(imageFile.type)) {
+        throw new Error('Invalid image format. Please upload JPEG, PNG, or WebP.');
+      }
+      if (imageFile.size > MAX_IMAGE_SIZE) {
+        throw new Error('Image too large. Maximum size is 5MB.');
+      }
+      
+      const imageUrl = await readFileAsDataURL(imageFile);
+      const imgDiv = addImageMessage(imageUrl);
+      userMessages.push(imgDiv);
+      conversationHistory.push({
+        role: "user",
+        content: [
+          { type: "text", text: "Attached HVAC system image" },
+          { type: "image_url", image_url: { url: imageUrl } }
+        ]
+      });
+      document.getElementById('imageUpload').value = '';
+    }
+
+    const response = await getAIResponse(apiKey, conversationHistory);
+    const aiResponse = response.choices[0].message.content;
+    
+    conversationHistory.push({ role: "assistant", content: aiResponse });
+    addMessage(formatResponse(aiResponse), 'ai');
+
+    // Scroll to keep question visible
+    if (userMessages.length > 0) {
+      userMessages[0].scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start',
+        inline: 'nearest'
+      });
+    }
+
+  } catch (error) {
+    showError(error.message);
+    console.error('Error:', error);
+  } finally {
+    sendButton.disabled = false;
+    sendButton.innerHTML = 'Send';
+    userInput.value = '';
+    userInput.focus();
+  }
+}
+
+async function getAIResponse(apiKey, messages) {
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error.name === 'TypeError') {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+    throw error;
+  }
+}
+
+function showError(message) {
+  const errorDiv = document.getElementById('errorMessage');
+  errorDiv.textContent = message;
+  errorDiv.style.display = 'block';
+  setTimeout(() => errorDiv.style.display = 'none', 5000);
+}
+
+function addMessage(content, sender) {
+  const chatHistory = document.getElementById('chatHistory');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${sender}-message`;
+  messageDiv.innerHTML = content;
+  
+  messageDiv.querySelectorAll('.clickable-header').forEach(header => {
+    header.onclick = () => handleHeaderClick(header.textContent);
+  });
+  
+  messageDiv.querySelectorAll('.clickable-question').forEach(question => {
+    question.onclick = () => handleQuestionClick(question.textContent);
+  });
+
+  chatHistory.appendChild(messageDiv);
+  return messageDiv;
+}
+
+function addImageMessage(url) {
+  const container = document.createElement('div');
+  container.className = 'image-preview-container';
+  
+  const img = document.createElement('img');
+  img.src = url;
+  img.className = 'image-preview';
+  img.alt = 'Uploaded HVAC system image';
+
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'remove-image';
+  removeBtn.innerHTML = '×';
+  removeBtn.onclick = () => container.remove();
+
+  container.appendChild(img);
+  container.appendChild(removeBtn);
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message user-message';
+  messageDiv.appendChild(container);
+
+  document.getElementById('chatHistory').appendChild(messageDiv);
+  return messageDiv;
+}
+
+function formatResponse(text) {
+  return text
+    .replace(/## (.*?)\n/g, (_, header) => 
+      `<div class="clickable-header" onclick="handleHeaderClick('${header}')">${header}</div>`
+    )
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(\d+)\.\s/g, '<div class="step">$1. ')
+    .replace(/- (.*)/g, (_, question) => 
+      `<div class="clickable-question" onclick="handleQuestionClick('${question}')">• ${question}</div>`
+    )
+    .replace(/WARNING:/gi, '<div class="warning">⚠️ WARNING:</div>');
+}
+
+function handleHeaderClick(header) {
+  const questions = {
+    'Diagnosis': 'Can you explain this diagnosis in more detail?',
+    'Recommended Actions': 'How do I perform these actions safely?',
+    'Safety Precautions': 'Why are these precautions necessary?',
+    'Components Identified': 'What do these components do?'
+  };
+  
+  document.getElementById('userInput').value = questions[header] || `Tell me more about the ${header}`;
+  document.getElementById('userInput').focus();
+}
+
+function handleQuestionClick(question) {
+  document.getElementById('userInput').value = question.replace('• ', '');
+  document.getElementById('userInput').focus();
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('userInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') handleSend();
+});
+
+let recognition;
+let isListening = false;
+
+function startVoiceInput() {
+  const micButton = document.getElementById('micButton');
+
+  if (!('webkitSpeechRecognition' in window)) {
+    showError('Speech recognition not supported in this browser');
+    return;
+  }
+
+  navigator.permissions?.query({ name: 'microphone' }).then(permissionStatus => {
+    if (permissionStatus.state === 'denied') {
+      showError('Microphone access blocked. Enable in browser settings.');
+    }
+  });
+
+  if (!recognition) {
+    recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      document.getElementById('userInput').value = transcript;
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      micButton.innerHTML = '🎙️';
+    };
+
+    recognition.onerror = (event) => {
+      showError(`Voice input error: ${event.error}`);
+      isListening = false;
+      micButton.innerHTML = '🎙️';
+    };
+  }
+
+  if (!isListening) {
+    recognition.start();
+    isListening = true;
+    micButton.innerHTML = '🛑';
+  } else {
+    recognition.stop();
+    isListening = false;
+    micButton.innerHTML = '🎙️';
+  }
+}
+</script>
+</body>
+</html>
