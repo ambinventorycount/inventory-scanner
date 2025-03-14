@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Conversational HVAC Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; }
+    
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    .chat-container { 
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      height: 70vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .chat-history {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      line-height: 1.5;
+    }
+    
+    .user-message {
+      background: #007bff;
+      color: white;
+      align-self: flex-end;
+      border-radius: 18px 18px 4px 18px;
+    }
+    
+    .ai-message {
+      background: #ffffff;
+      align-self: flex-start;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px 18px 18px 18px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .input-container {
+      display: flex;
+      gap: 10px;
+      padding: 20px;
+      border-top: 1px solid #eee;
+      background: white;
+    }
+    
+    #userInput {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #ddd;
+      border-radius: 25px;
+      font-size: 16px;
+    }
+    
+    button { 
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 25px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    
+    .reset-button {
+      background: #dc3545;
+      white-space: nowrap;
+    }
+    
+    button:hover { opacity: 0.9; }
+    button:disabled { background: #b0b0b0; cursor: not-allowed; }
+    
+    .loading { 
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #007bff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s linear infinite;
+    }
+    
+    .warning { 
+      color: #c0392b;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fdedec;
+      border-left: 4px solid #c0392b;
+    }
+    
+    .image-preview {
+      max-width: 200px;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+
+    .clickable-header {
+      color: #007bff;
+      cursor: pointer;
+      text-decoration: underline;
+      transition: all 0.3s;
+      margin: 10px 0;
+    }
+
+    .clickable-header:hover {
+      opacity: 0.8;
+    }
+
+    .clickable-question {
+      cursor: pointer;
+      color: #007bff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin: 5px 0;
+    }
+
+    .clickable-question:hover {
+      background: #f0f8ff;
+    }
+
+    .api-key-container {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+#micButton {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 12px 16px;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+#micButton:hover { opacity: 0.9; }
+
+
+    #apiKey {
+      flex: 1;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 HVAC Conversational Assistant</h1>
+    <div class="chat-container">
+      <div class="chat-history" id="chatHistory">
+        <div class="message ai-message">
+          Hello! I'm your HVAC expert assistant. You can:
+          <ul>
+            <li>Describe issues in plain language</li>
+            <li>Upload photos of equipment</li>
+            <li>Click headers/questions to follow up</li>
+          </ul>
+          How can I help today?
+        </div>
+      </div>
+      
+      <div class="input-container">
+        <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+        <button onclick="document.getElementById('imageUpload').click()">📷</button>
+        <input type="text" id="userInput" placeholder="Type your message...">
+<button id="micButton" onclick="startVoiceInput()">🎙️</button>
+
+        <button id="sendButton" onclick="handleSend()">Send</button>
+      </div>
+    </div>
+    
+    <div class="api-key-container">
+      <input type="password" id="apiKey" placeholder="Enter OpenAI API Key">
+      <button class="reset-button" onclick="resetChat()">Reset Chat</button>
+    </div>
+  </div>
+
+<script>
+const SYSTEM_PROMPT = `You are an HVAC expert technician assistant. Format responses with:
+## Section Headers
+- Bullet points for questions
+**WARNING:** Safety alerts
+1. Numbered steps`;
+
+let conversationHistory = [
+  { role: "system", content: SYSTEM_PROMPT },
+  { role: "assistant", content: "Hello! How can I assist with your HVAC system today?" }
+];
+
+function resetChat() {
+  conversationHistory = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { 
+      role: "assistant", 
+      content: `Hello! I'm your HVAC expert assistant. You can:
+        <ul>
+          <li>Describe issues in plain language</li>
+          <li>Upload photos of equipment</li>
+          <li>Click headers/questions to follow up</li>
+        </ul>
+        How can I help today?`
+    }
+  ];
+  
+  const chatHistory = document.getElementById('chatHistory');
+  chatHistory.innerHTML = '<div class="message ai-message">' + 
+    conversationHistory[1].content + '</div>';
+  
+  document.getElementById('imageUpload').value = '';
+  chatHistory.scrollTop = 0;
+}
+
+async function handleSend() {
+  const userInput = document.getElementById('userInput');
+  const apiKey = document.getElementById('apiKey').value;
+  const message = userInput.value.trim();
+  const imageFile = document.getElementById('imageUpload').files[0];
+  
+  if (!apiKey) return alert('Please enter your API key');
+  if (!message && !imageFile) return;
+
+  const sendButton = document.getElementById('sendButton');
+  sendButton.disabled = true;
+  sendButton.innerHTML = '<div class="loading"></div>';
+
+  try {
+    if (message) {
+      addMessage(message, 'user');
+      conversationHistory.push({ role: "user", content: message });
+    }
+
+    if (imageFile) {
+      const imageUrl = await readFileAsDataURL(imageFile);
+      addImageMessage(imageUrl);
+      conversationHistory.push({
+        role: "user",
+        content: [
+          { type: "text", text: "Attached HVAC system image" },
+          { type: "image_url", image_url: { url: imageUrl } }
+        ]
+      });
+      document.getElementById('imageUpload').value = '';
+    }
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: conversationHistory,
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+
+    const data = await response.json();
+    const aiResponse = data.choices[0].message.content;
+    
+    conversationHistory.push({ role: "assistant", content: aiResponse });
+    addMessage(formatResponse(aiResponse), 'ai');
+
+  } catch (error) {
+    addMessage(`⚠️ Error: ${error.message}`, 'ai');
+  } finally {
+    sendButton.disabled = false;
+    sendButton.innerHTML = 'Send';
+    userInput.value = '';
+    userInput.focus();
+  }
+}
+
+function addMessage(content, sender) {
+  const chatHistory = document.getElementById('chatHistory');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${sender}-message`;
+  messageDiv.innerHTML = content;
+  
+  messageDiv.querySelectorAll('.clickable-header').forEach(header => {
+    header.onclick = () => handleHeaderClick(header.textContent);
+  });
+  
+  messageDiv.querySelectorAll('.clickable-question').forEach(question => {
+    question.onclick = () => handleQuestionClick(question.textContent);
+  });
+
+  chatHistory.appendChild(messageDiv);
+  chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+function addImageMessage(url) {
+  const chatHistory = document.getElementById('chatHistory');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message user-message';
+  
+  const img = document.createElement('img');
+  img.src = url;
+  img.className = 'image-preview';
+  
+  messageDiv.appendChild(img);
+  chatHistory.appendChild(messageDiv);
+  chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+function formatResponse(text) {
+  return text
+    .replace(/## (.*?)\n/g, (_, header) => 
+      `<div class="clickable-header" onclick="handleHeaderClick('${header}')">${header}</div>`
+    )
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(\d+)\.\s/g, '<div class="step">$1. ')
+    .replace(/- (.*)/g, (_, question) => 
+      `<div class="clickable-question" onclick="handleQuestionClick('${question}')">• ${question}</div>`
+    )
+    .replace(/WARNING:/gi, '<div class="warning">⚠️ WARNING:</div>');
+}
+
+function handleHeaderClick(header) {
+  const questions = {
+    'Diagnosis': 'Can you explain this diagnosis in more detail?',
+    'Recommended Actions': 'How do I perform these actions safely?',
+    'Safety Precautions': 'Why are these precautions necessary?',
+    'Components Identified': 'What do these components do?'
+  };
+  
+  document.getElementById('userInput').value = questions[header] || `Tell me more about the ${header}`;
+  document.getElementById('userInput').focus();
+}
+
+function handleQuestionClick(question) {
+  document.getElementById('userInput').value = question.replace('• ', '');
+  document.getElementById('userInput').focus();
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('userInput').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') handleSend();
+});
+
+
+
+
+
+
+let recognition;
+let isListening = false;
+
+function startVoiceInput() {
+  const micButton = document.getElementById('micButton');
+
+  // Check browser support
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert('Speech Recognition not supported in this browser.');
+    return;
+  }
+
+  if (!recognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US'; // You can set this to other languages if needed
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    // When speech is detected and result is ready
+    recognition.onresult = function(event) {
+      const transcript = event.results[0][0].transcript;
+      document.getElementById('userInput').value = transcript;
+      handleSend(); // Optionally auto-send after recognition
+    };
+
+    // On end, reset listening state
+    recognition.onend = function() {
+      isListening = false;
+      micButton.innerText = '🎙️';
+    };
+
+    recognition.onerror = function(event) {
+      alert('Voice input error: ' + event.error);
+      isListening = false;
+      micButton.innerText = '🎙️';
+    };
+  }
+
+  // Start or Stop based on current state
+  if (!isListening) {
+    recognition.start();
+    isListening = true;
+    micButton.innerText = '🛑'; // Change icon to indicate recording
+  } else {
+    recognition.stop();
+    isListening = false;
+    micButton.innerText = '🎙️';
+  }
+}
+
+</script>
+</body>
+</html>
